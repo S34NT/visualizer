@@ -71,8 +71,10 @@ export class Flock {
   
   /**
    * Update all boids for one simulation step
+   * @param {Object} params - Simulation parameters
+   * @param {Array} attractionPoints - Optional array of attraction points from tracking
    */
-  update(params) {
+  update(params, attractionPoints = null) {
     this.params = params;
     
     // Update spatial grid cell size if visual range changed
@@ -88,7 +90,7 @@ export class Flock {
     for (let i = 0; i < this.boids.length; i++) {
       const boid = this.boids[i];
       const neighbors = this.spatialGrid.getNearby(boid);
-      boid.update(neighbors, params);
+      boid.update(neighbors, params, attractionPoints);
     }
   }
   
@@ -112,4 +114,7 @@ export class Flock {
     return this.boids.length;
   }
 }
+
+
+
 

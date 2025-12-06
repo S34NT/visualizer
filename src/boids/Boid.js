@@ -154,14 +154,115 @@ export class Boid {
     }
   }
   
+  /**
+   * Apply attraction to tracked points (hands/face)
+   * Uses inverse-square falloff for natural gravitational feel
+   */
+  applyAttraction(attractionPoints, baseStrength, attractionRange) {
+    if (!attractionPoints || attractionPoints.length === 0) return;
+    
+    for (const point of attractionPoints) {
+      const targetPos = point.position;
+      const pointStrength = point.strength || 1.0;
+      
+      // Calculate direction to target
+      const dx = targetPos.x - this.position.x;
+      const dy = targetPos.y - this.position.y;
+      const dz = targetPos.z - this.position.z;
+      
+      const distSq = dx * dx + dy * dy + dz * dz;
+      const dist = Math.sqrt(distSq);
+      
+      // Only attract within range
+      if (dist > attractionRange || dist < 1) continue;
+      
+      // Inverse-square falloff with distance, capped for stability
+      // Strength increases as boid gets closer, but not too close
+      const minDist = 20; // Minimum distance to prevent extreme forces
+      const effectiveDist = Math.max(dist, minDist);
+      const falloff = 1.0 - (dist / attractionRange);
+      const force = baseStrength * pointStrength * falloff * falloff;
+      
+      // Normalize direction and apply force
+      const invDist = 1.0 / dist;
+      this.velocity.x += dx * invDist * force;
+      this.velocity.y += dy * invDist * force;
+      this.velocity.z += dz * invDist * force;
+    }
+  }
+  
+  /**
+   * Apply orbit behavior around attraction points
+   * Creates swirling patterns around hands/face
+   */
+  applyOrbit(attractionPoints, orbitStrength, orbitRange) {
+    if (!attractionPoints || attractionPoints.length === 0) return;
+    
+    for (const point of attractionPoints) {
+      if (point.type === 'fingertip') continue; // Skip fingertips for orbit
+      
+      const targetPos = point.position;
+      
+      // Calculate direction to target
+      const dx = targetPos.x - this.position.x;
+      const dy = targetPos.y - this.position.y;
+      const dz = targetPos.z - this.position.z;
+      
+      const distSq = dx * dx + dy * dy + dz * dz;
+      const dist = Math.sqrt(distSq);
+      
+      // Only orbit within range
+      if (dist > orbitRange || dist < 10) continue;
+      
+      // Calculate perpendicular vector for orbit (cross product with up)
+      // This creates a swirling motion around the attraction point
+      const upX = 0, upY = 1, upZ = 0;
+      const perpX = dy * upZ - dz * upY;
+      const perpY = dz * upX - dx * upZ;
+      const perpZ = dx * upY - dy * upX;
+      
+      const perpLen = Math.sqrt(perpX * perpX + perpY * perpY + perpZ * perpZ);
+      if (perpLen < 0.001) continue;
+      
+      // Apply orbit force (tangential to the direction toward target)
+      const falloff = 1.0 - (dist / orbitRange);
+      const force = orbitStrength * falloff;
+      
+      this.velocity.x += (perpX / perpLen) * force;
+      this.velocity.y += (perpY / perpLen) * force;
+      this.velocity.z += (perpZ / perpLen) * force;
+    }
+  }
+  
   // Full update cycle
-  update(neighbors, params) {
+  update(neighbors, params, attractionPoints = null) {
     this.applySeparation(neighbors, params.protectedRange, params.avoidFactor);
     this.applyAlignment(neighbors, params.visualRange, params.matchingFactor);
     this.applyCohesion(neighbors, params.visualRange, params.centeringFactor);
+    
+    // Apply attraction to tracked hands/face if enabled
+    if (params.trackingEnabled && attractionPoints && attractionPoints.length > 0) {
+      this.applyAttraction(
+        attractionPoints, 
+        params.attractionStrength, 
+        params.attractionRange
+      );
+      
+      if (params.orbitEnabled) {
+        this.applyOrbit(
+          attractionPoints,
+          params.orbitStrength,
+          params.attractionRange
+        );
+      }
+    }
+    
     this.avoidBoundaries(params.margin, params.turnFactor);
     this.limitSpeed(params.minSpeed, params.maxSpeed);
     this.updatePosition();
   }
 }
+
+
+
 

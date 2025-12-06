@@ -7,6 +7,7 @@ export class GUIControls {
     this.callbacks = callbacks;
     this.gui = new GUI({ title: 'Murmuration Controls' });
     
+    this.trackingFolder = null;
     this.initControls();
   }
   
@@ -48,6 +49,42 @@ export class GUIControls {
     visualFolder.add(this.params, 'maxDistance', 100, 400, 10)
       .name('Color Distance');
     
+    // Hand/Face Tracking folder
+    this.trackingFolder = this.gui.addFolder('🖐️ Hand/Face Tracking');
+    
+    // Main toggle for tracking
+    this.trackingFolder.add(this.params, 'trackingEnabled')
+      .name('Enable Tracking')
+      .onChange(enabled => {
+        this.callbacks.onTrackingToggle?.(enabled);
+        this.updateTrackingControlsState(enabled);
+      });
+    
+    // Preview toggle
+    this.trackingFolder.add(this.params, 'showPreview')
+      .name('Show Preview')
+      .onChange(visible => this.callbacks.onPreviewToggle?.(visible));
+    
+    // Attraction settings
+    this.trackingFolder.add(this.params, 'attractionStrength', 0.01, 0.5, 0.01)
+      .name('Attraction Force');
+    
+    this.trackingFolder.add(this.params, 'attractionRange', 50, 400, 10)
+      .name('Attraction Range');
+    
+    this.trackingFolder.add(this.params, 'handAttractionStrength', 0.1, 2.0, 0.1)
+      .name('Hand Strength');
+    
+    this.trackingFolder.add(this.params, 'faceAttractionStrength', 0.1, 2.0, 0.1)
+      .name('Face Strength');
+    
+    // Orbit settings
+    this.trackingFolder.add(this.params, 'orbitEnabled')
+      .name('Enable Orbit');
+    
+    this.trackingFolder.add(this.params, 'orbitStrength', 0.01, 0.3, 0.01)
+      .name('Orbit Strength');
+    
     // Presets folder
     const presetsFolder = this.gui.addFolder('Presets');
     const presetOptions = {
@@ -75,6 +112,16 @@ export class GUIControls {
     // Open important folders by default
     flockFolder.open();
     behaviorFolder.open();
+    this.trackingFolder.open();
+  }
+  
+  /**
+   * Update tracking controls enabled state based on main toggle
+   */
+  updateTrackingControlsState(enabled) {
+    // Visual feedback - could dim controls when disabled
+    // For now, just log the state change
+    console.log('Tracking controls state:', enabled ? 'enabled' : 'disabled');
   }
   
   /**
@@ -129,4 +176,7 @@ export class GUIControls {
     this.gui.destroy();
   }
 }
+
+
+
 
