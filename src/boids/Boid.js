@@ -161,6 +161,8 @@ export class Boid {
   applyAttraction(attractionPoints, baseStrength, attractionRange) {
     if (!attractionPoints || attractionPoints.length === 0) return;
     
+    const rangeSq = attractionRange * attractionRange;
+    
     for (const point of attractionPoints) {
       const targetPos = point.position;
       const pointStrength = point.strength || 1.0;
@@ -171,10 +173,11 @@ export class Boid {
       const dz = targetPos.z - this.position.z;
       
       const distSq = dx * dx + dy * dy + dz * dz;
-      const dist = Math.sqrt(distSq);
       
-      // Only attract within range
-      if (dist > attractionRange || dist < 1) continue;
+      // Early exit using squared distance (avoids sqrt)
+      if (distSq > rangeSq || distSq < 1) continue;
+      
+      const dist = Math.sqrt(distSq);
       
       // Inverse-square falloff with distance, capped for stability
       // Strength increases as boid gets closer, but not too close
@@ -198,6 +201,8 @@ export class Boid {
   applyOrbit(attractionPoints, orbitStrength, orbitRange) {
     if (!attractionPoints || attractionPoints.length === 0) return;
     
+    const rangeSq = orbitRange * orbitRange;
+    
     for (const point of attractionPoints) {
       if (point.type === 'fingertip') continue; // Skip fingertips for orbit
       
@@ -209,10 +214,11 @@ export class Boid {
       const dz = targetPos.z - this.position.z;
       
       const distSq = dx * dx + dy * dy + dz * dz;
-      const dist = Math.sqrt(distSq);
       
-      // Only orbit within range
-      if (dist > orbitRange || dist < 10) continue;
+      // Early exit using squared distance (avoids sqrt)
+      if (distSq > rangeSq || distSq < 100) continue;
+      
+      const dist = Math.sqrt(distSq);
       
       // Calculate perpendicular vector for orbit (cross product with up)
       // This creates a swirling motion around the attraction point

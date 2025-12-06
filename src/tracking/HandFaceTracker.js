@@ -32,9 +32,12 @@ export class HandFaceTracker {
     this.mappingScale = params.trackingScale || 200; // Scale factor for coordinate mapping
     this.depthScale = params.depthScale || 100; // Z-axis scale
     
+    // Preview visibility (for performance - skip drawing when hidden)
+    this.previewVisible = params.showPreview !== false;
+    
     // Performance settings
     this.lastFrameTime = 0;
-    this.targetFPS = 30; // Process at 30fps max for performance
+    this.targetFPS = 15; // Process at 15fps - sufficient for smooth tracking, big perf win
     this.frameInterval = 1000 / this.targetFPS;
     
     // Event callbacks
@@ -130,11 +133,12 @@ export class HandFaceTracker {
       this.video.style.display = 'none';
       document.body.appendChild(this.video);
       
-      // Request camera access
+      // Request camera access - lower resolution for better performance
+      // 320x240 is sufficient for hand/face detection
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          width: { ideal: 320 },
+          height: { ideal: 240 },
           facingMode: 'user'
         },
         audio: false
@@ -286,8 +290,8 @@ export class HandFaceTracker {
       // Process results
       this.processResults(handResults, faceResults);
       
-      // Update preview
-      if (this.videoCtx) {
+      // Update preview only if visible (saves CPU)
+      if (this.videoCtx && this.previewVisible) {
         this.drawPreview(handResults, faceResults);
       }
       
@@ -339,19 +343,16 @@ export class HandFaceTracker {
           palmCenter: palmCenter
         });
         
-        // Also add fingertips as weaker attraction points
-        const fingertipIndices = [4, 8, 12, 16, 20]; // Thumb, index, middle, ring, pinky tips
-        for (const idx of fingertipIndices) {
-          const tip = landmarks[idx];
-          const tipSimPos = this.mapToSimulationSpace(tip);
-          
-          this.attractionPoints.push({
-            type: 'fingertip',
-            handedness: handedness,
-            position: tipSimPos,
-            strength: (this.params.handAttractionStrength || 1.0) * 0.3
-          });
-        }
+        // Add index fingertip as secondary attraction point (reduced from 5 for performance)
+        const indexTip = landmarks[8];
+        const tipSimPos = this.mapToSimulationSpace(indexTip);
+        
+        this.attractionPoints.push({
+          type: 'fingertip',
+          handedness: handedness,
+          position: tipSimPos,
+          strength: (this.params.handAttractionStrength || 1.0) * 0.4
+        });
       }
     }
     
@@ -432,17 +433,14 @@ export class HandFaceTracker {
         ctx.arc(palmX, palmY, 8, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw fingertips
-        const fingertipIndices = [4, 8, 12, 16, 20];
-        for (const idx of fingertipIndices) {
-          const tip = landmarks[idx];
-          const x = canvas.width - tip.x * canvas.width;
-          const y = tip.y * canvas.height;
-          
-          ctx.beginPath();
-          ctx.arc(x, y, 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Draw index fingertip
+        const indexTip = landmarks[8];
+        const x = canvas.width - indexTip.x * canvas.width;
+        const y = indexTip.y * canvas.height;
+        
+        ctx.beginPath();
+        ctx.arc(x, y, 5, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     
@@ -477,6 +475,7 @@ export class HandFaceTracker {
    * Show/hide preview
    */
   setPreviewVisible(visible) {
+    this.previewVisible = visible;
     const container = document.getElementById('tracking-preview');
     if (container) {
       container.style.display = visible ? 'block' : 'none';
