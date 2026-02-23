@@ -32,21 +32,34 @@ export class AudioAnalyzer {
     this.cooldownMs = options.cooldownMs ?? 120;
   }
 
-  async startFromMic() {
-    if (this.isRunning) {
-      return true;
-    }
+  async startFromYouTube(youtubeUrl) {
+    if (this.isRunning) return true;
 
     await this.ensureAudioContext();
 
-    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+    if (youtubeUrl) {
+      // Open the linked YouTube video so the user can select that tab in the share picker.
+      window.open(youtubeUrl, '_blank', 'noopener,noreferrer');
+    }
+
+    this.mediaStream = await navigator.mediaDevices.getDisplayMedia({
+      video: {
+        frameRate: { ideal: 10, max: 15 }
+      },
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
         autoGainControl: false
       },
-      video: false
+      preferCurrentTab: true
     });
+
+    const hasAudioTrack = this.mediaStream.getAudioTracks().length > 0;
+    if (!hasAudioTrack) {
+      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream = null;
+      throw new Error('No audio track found. Share a browser tab and enable "Share tab audio".');
+    }
 
     this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
     this.connectGraph();
@@ -54,6 +67,12 @@ export class AudioAnalyzer {
     this.isInitialized = true;
     this.isRunning = true;
     return true;
+  }
+
+
+  // Backwards-compatible alias kept so stale bundles or older call sites do not break.
+  async startFromMic(youtubeUrl) {
+    return this.startFromYouTube(youtubeUrl);
   }
 
   async ensureAudioContext() {
