@@ -38,7 +38,11 @@ npm run build
 - **F**: Toggle fullscreen
 - **S**: Take screenshot
 - **H**: Hide/show GUI
-- **M**: Enable microphone audio reactivity
+- **M**: Link a YouTube video and start tab-audio reactivity
+
+### Touch / Mobile
+- **🎵 Link YouTube Audio button** (bottom-left): Opens URL prompt and starts YouTube tab-audio linking flow
+- **Important**: On mobile browsers, tap the button first (user gesture required), then choose the YouTube tab and enable shared/tab audio if prompted
 
 ## Parameters
 
@@ -95,6 +99,13 @@ The simulation uses several optimization techniques:
 2. **GPU Rendering**: All color calculations happen in shaders
 3. **Buffer Reuse**: Float32Arrays are reused to minimize allocations
 4. **Additive Blending**: Beautiful glow effect with minimal overdraw cost
+
+## Deployment Notes
+
+- The Vite `base` path defaults to `/` (works for Vercel-style root deployments).
+- If you deploy under a subpath (for example GitHub Pages), set `VITE_BASE_PATH` at build time.
+  - Example: `VITE_BASE_PATH=/murmurations/ npm run build`
+- The build log warning about chunks larger than 500 kB is only a performance hint and **not** a deployment failure by itself.
 
 ## Browser Requirements
 

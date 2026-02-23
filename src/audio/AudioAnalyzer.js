@@ -69,6 +69,12 @@ export class AudioAnalyzer {
     return true;
   }
 
+
+  // Backwards-compatible alias kept so stale bundles or older call sites do not break.
+  async startFromMic(youtubeUrl) {
+    return this.startFromYouTube(youtubeUrl);
+  }
+
   async ensureAudioContext() {
     if (!this.audioContext) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
