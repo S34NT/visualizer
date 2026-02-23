@@ -4,6 +4,7 @@ import { Flock } from './boids/Flock.js';
 import { FlockRenderer } from './boids/FlockRenderer.js';
 import { GUIControls } from './controls/GUIControls.js';
 import { HandFaceTracker } from './tracking/HandFaceTracker.js';
+import { AudioAnalyzer } from './audio/AudioAnalyzer.js';
 import { defaults } from './config/defaults.js';
 
 class MurmurationSimulator {
@@ -19,6 +20,18 @@ class MurmurationSimulator {
     this.tracker = null;
     this.attractionPoints = [];
     this.trackingInitializing = false;
+
+    // Audio visualization
+    this.audioAnalyzer = null;
+    this.audioInitializing = false;
+    this.audioFeatures = {
+      rms: 0,
+      bass: 0,
+      mid: 0,
+      treble: 0,
+      beat: 0,
+      peak: 0
+    };
     
     // Initialize components
     this.initScene();
@@ -30,6 +43,44 @@ class MurmurationSimulator {
     // Start animation loop
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
+  }
+
+  async initAudioAnalyzer() {
+    if (this.audioAnalyzer || this.audioInitializing) return;
+
+    this.audioInitializing = true;
+    this.showTrackingStatus('🎵 Link a YouTube video to start audio reactivity...');
+
+    try {
+      this.audioAnalyzer = new AudioAnalyzer();
+      const youtubeUrl = window.prompt('Paste a YouTube URL for audio reactivity:');
+      if (!youtubeUrl) {
+        throw new Error('No YouTube URL provided.');
+      }
+      await this.audioAnalyzer.startFromYouTube(youtubeUrl);
+      this.showTrackingStatus('🎵 Audio visualizer active from shared YouTube tab.', false, 3500);
+    } catch (error) {
+      console.error('Failed to initialize audio analyzer:', error);
+      this.showTrackingStatus('Failed to initialize YouTube audio input. Share the tab with audio enabled.', true);
+      this.audioAnalyzer = null;
+    }
+
+    this.audioInitializing = false;
+  }
+
+  applyAudioReactiveModulation() {
+    if (!this.audioAnalyzer || !this.audioAnalyzer.isRunning) return;
+
+    this.audioFeatures = this.audioAnalyzer.getFeatures();
+    const { rms, bass, mid, treble, beat } = this.audioFeatures;
+
+    // Lightweight v1 mapping: modulate existing flock params with clamped ranges.
+    this.params.maxSpeed = 6 + bass * 4;
+    this.params.matchingFactor = 0.03 + mid * 0.1;
+    this.params.avoidFactor = 0.03 + treble * 0.1;
+    this.params.turnFactor = 0.12 + beat * 0.2;
+    this.params.particleSize = 2.2 + rms * 3.2;
+    this.params.maxDistance = 180 + treble * 180;
   }
   
   initScene() {
@@ -219,6 +270,9 @@ class MurmurationSimulator {
             this.gui.gui.controllersRecursive().forEach(c => c.updateDisplay());
           }
           break;
+        case 'KeyM':
+          this.initAudioAnalyzer();
+          break;
       }
     });
   }
@@ -276,6 +330,8 @@ class MurmurationSimulator {
     
     // Update simulation if not paused
     if (!this.isPaused) {
+      this.applyAudioReactiveModulation();
+
       // Pass attraction points if tracking is enabled
       const points = this.params.trackingEnabled ? this.attractionPoints : null;
       this.flock.update(this.params, points);
@@ -298,6 +354,10 @@ class MurmurationSimulator {
     if (this.tracker) {
       this.tracker.dispose();
     }
+
+    if (this.audioAnalyzer) {
+      this.audioAnalyzer.dispose();
+    }
   }
 }
 
@@ -316,7 +376,6 @@ if (document.readyState === 'loading') {
 } else {
   window.simulator = new MurmurationSimulator();
 }
-
 
 
 
