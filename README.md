@@ -38,7 +38,7 @@ npm run build
 - **F**: Toggle fullscreen
 - **S**: Take screenshot
 - **H**: Hide/show GUI
-- **M**: Link a YouTube video and start tab-audio reactivity
+- **M**: Enable microphone audio reactivity
 
 ## Parameters
 
