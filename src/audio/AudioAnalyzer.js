@@ -5,6 +5,7 @@ export class AudioAnalyzer {
     this.minDecibels = options.minDecibels ?? -90;
     this.maxDecibels = options.maxDecibels ?? -10;
     this.emaAlpha = options.emaAlpha ?? 0.2;
+    this.monitorGain = options.monitorGain ?? 1.0;
 
     this.audioContext = null;
     this.sourceNode = null;
@@ -36,6 +37,10 @@ export class AudioAnalyzer {
     if (this.isRunning) return true;
 
     await this.ensureAudioContext();
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      throw new Error('This browser does not support tab audio capture (getDisplayMedia). Try Chrome on Android with tab audio sharing enabled.');
+    }
 
     if (youtubeUrl) {
       // Open the linked YouTube video so the user can select that tab in the share picker.
@@ -102,6 +107,8 @@ export class AudioAnalyzer {
 
     this.sourceNode.connect(this.analyser);
     this.analyser.connect(this.gainNode);
+    this.gainNode.connect(this.audioContext.destination);
+    this.gainNode.gain.value = this.monitorGain;
 
     const binCount = this.analyser.frequencyBinCount;
     this.freqData = new Uint8Array(binCount);

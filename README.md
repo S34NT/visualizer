@@ -44,6 +44,11 @@ npm run build
 - **🎵 Link YouTube Audio button** (bottom-left): Opens URL prompt and starts YouTube tab-audio linking flow
 - **Important**: On mobile browsers, tap the button first (user gesture required), then choose the YouTube tab and enable shared/tab audio if prompted
 
+- If video links successfully but you hear silence and see no reaction:
+  1. Confirm the YouTube video is actively playing (not paused).
+  2. In the share picker, choose the **browser tab** and enable **Share tab audio**.
+  3. Use **Chrome on Android** when possible; many iOS browsers do not fully support tab-audio capture APIs.
+
 ## Parameters
 
 ### Flocking Behavior
