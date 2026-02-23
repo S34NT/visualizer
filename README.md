@@ -100,6 +100,13 @@ The simulation uses several optimization techniques:
 3. **Buffer Reuse**: Float32Arrays are reused to minimize allocations
 4. **Additive Blending**: Beautiful glow effect with minimal overdraw cost
 
+## Deployment Notes
+
+- The Vite `base` path defaults to `/` (works for Vercel-style root deployments).
+- If you deploy under a subpath (for example GitHub Pages), set `VITE_BASE_PATH` at build time.
+  - Example: `VITE_BASE_PATH=/murmurations/ npm run build`
+- The build log warning about chunks larger than 500 kB is only a performance hint and **not** a deployment failure by itself.
+
 ## Browser Requirements
 
 - WebGL 2.0 support
