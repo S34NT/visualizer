@@ -4,6 +4,7 @@ import { Flock } from './boids/Flock.js';
 import { FlockRenderer } from './boids/FlockRenderer.js';
 import { GUIControls } from './controls/GUIControls.js';
 import { HandFaceTracker } from './tracking/HandFaceTracker.js';
+import { AudioAnalyzer } from './audio/AudioAnalyzer.js';
 import { defaults } from './config/defaults.js';
 
 class MurmurationSimulator {
@@ -19,6 +20,19 @@ class MurmurationSimulator {
     this.tracker = null;
     this.attractionPoints = [];
     this.trackingInitializing = false;
+
+    // Audio visualization
+    this.audioAnalyzer = null;
+    this.audioInitializing = false;
+    this.audioFeatures = {
+      rms: 0,
+      bass: 0,
+      mid: 0,
+      treble: 0,
+      beat: 0,
+      peak: 0
+    };
+    this.audioLinkButton = null;
     
     // Initialize components
     this.initScene();
@@ -26,12 +40,98 @@ class MurmurationSimulator {
     this.initGUI();
     this.initStats();
     this.initKeyboard();
+    this.initAudioLinkButton();
     
     // Start animation loop
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
   }
+
+  async initAudioAnalyzer() {
+    if (this.audioAnalyzer || this.audioInitializing) return;
+
+    this.audioInitializing = true;
+    this.showTrackingStatus('🎵 Link a YouTube video to start audio reactivity...');
+
+    try {
+      this.audioAnalyzer = new AudioAnalyzer();
+      const youtubeUrl = window.prompt('Paste a YouTube URL for audio reactivity:');
+      if (!youtubeUrl) {
+        throw new Error('No YouTube URL provided.');
+      }
+      if (typeof this.audioAnalyzer.startFromYouTube === 'function') {
+        await this.audioAnalyzer.startFromYouTube(youtubeUrl);
+      } else if (typeof this.audioAnalyzer.startFromMic === 'function') {
+        // Compatibility fallback for older analyzer builds.
+        await this.audioAnalyzer.startFromMic(youtubeUrl);
+      } else {
+        throw new Error('AudioAnalyzer has no supported start method.');
+      }
+      this.showTrackingStatus('🎵 Audio visualizer active from shared YouTube tab.', false, 3500);
+      if (this.audioLinkButton) {
+        this.audioLinkButton.textContent = '🎵 YouTube Audio Linked';
+      }
+    } catch (error) {
+      console.error('Failed to initialize audio analyzer:', error);
+      this.showTrackingStatus('Failed to initialize YouTube audio input. Share the tab with audio enabled.', true);
+      this.audioAnalyzer = null;
+      if (this.audioLinkButton) {
+        this.audioLinkButton.textContent = '🎵 Link YouTube Audio';
+      }
+    }
+
+    this.audioInitializing = false;
+  }
+
+  applyAudioReactiveModulation() {
+    if (!this.audioAnalyzer || !this.audioAnalyzer.isRunning) return;
+
+    this.audioFeatures = this.audioAnalyzer.getFeatures();
+    const { rms, bass, mid, treble, beat } = this.audioFeatures;
+
+    // Lightweight v1 mapping: modulate existing flock params with clamped ranges.
+    this.params.maxSpeed = 6 + bass * 4;
+    this.params.matchingFactor = 0.03 + mid * 0.1;
+    this.params.avoidFactor = 0.03 + treble * 0.1;
+    this.params.turnFactor = 0.12 + beat * 0.2;
+    this.params.particleSize = 2.2 + rms * 3.2;
+    this.params.maxDistance = 180 + treble * 180;
+  }
   
+
+  initAudioLinkButton() {
+    if (this.audioLinkButton) return;
+
+    const button = document.createElement('button');
+    button.id = 'audio-link-button';
+    button.type = 'button';
+    button.textContent = '🎵 Link YouTube Audio';
+    button.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1002;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: rgba(10, 16, 28, 0.82);
+      color: #fff;
+      font-size: 13px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      backdrop-filter: blur(6px);
+      cursor: pointer;
+      touch-action: manipulation;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+    `;
+
+    button.addEventListener('click', () => {
+      this.initAudioAnalyzer();
+    });
+
+    document.body.appendChild(button);
+    this.audioLinkButton = button;
+  }
+
   initScene() {
     const container = document.getElementById('canvas-container');
     this.sceneManager = new SceneManager(container);
@@ -219,6 +319,9 @@ class MurmurationSimulator {
             this.gui.gui.controllersRecursive().forEach(c => c.updateDisplay());
           }
           break;
+        case 'KeyM':
+          this.initAudioAnalyzer();
+          break;
       }
     });
   }
@@ -276,6 +379,8 @@ class MurmurationSimulator {
     
     // Update simulation if not paused
     if (!this.isPaused) {
+      this.applyAudioReactiveModulation();
+
       // Pass attraction points if tracking is enabled
       const points = this.params.trackingEnabled ? this.attractionPoints : null;
       this.flock.update(this.params, points);
@@ -298,6 +403,15 @@ class MurmurationSimulator {
     if (this.tracker) {
       this.tracker.dispose();
     }
+
+    if (this.audioAnalyzer) {
+      this.audioAnalyzer.dispose();
+    }
+
+    if (this.audioLinkButton) {
+      this.audioLinkButton.remove();
+      this.audioLinkButton = null;
+    }
   }
 }
 
@@ -316,7 +430,6 @@ if (document.readyState === 'loading') {
 } else {
   window.simulator = new MurmurationSimulator();
 }
-
 
 
 
