@@ -38,6 +38,11 @@ npm run build
 - **F**: Toggle fullscreen
 - **S**: Take screenshot
 - **H**: Hide/show GUI
+- **M**: Link a YouTube video and start tab-audio reactivity
+
+### Touch / Mobile
+- **🎵 Link YouTube Audio button** (bottom-left): Opens URL prompt and starts YouTube tab-audio linking flow
+- **Important**: On mobile browsers, tap the button first (user gesture required), then choose the YouTube tab and enable shared/tab audio if prompted
 
 ## Parameters
 
