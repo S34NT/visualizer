@@ -49,19 +49,38 @@ class MurmurationSimulator {
     if (this.audioAnalyzer || this.audioInitializing) return;
 
     this.audioInitializing = true;
-    this.showTrackingStatus('🎵 Initializing audio input...');
+    this.showTrackingStatus('🎵 Link a YouTube video to start audio reactivity...');
 
     try {
       this.audioAnalyzer = new AudioAnalyzer();
-      await this.audioAnalyzer.startFromMic();
-      this.showTrackingStatus('🎵 Audio visualizer active (mic input).', false, 3000);
+      const youtubeUrl = window.prompt('Paste a YouTube URL for audio reactivity:');
+      if (!youtubeUrl) {
+        throw new Error('No YouTube URL provided.');
+      }
+      await this.audioAnalyzer.startFromYouTube(youtubeUrl);
+      this.showTrackingStatus('🎵 Audio visualizer active from shared YouTube tab.', false, 3500);
     } catch (error) {
       console.error('Failed to initialize audio analyzer:', error);
-      this.showTrackingStatus('Failed to initialize microphone input.', true);
+      this.showTrackingStatus('Failed to initialize YouTube audio input. Share the tab with audio enabled.', true);
       this.audioAnalyzer = null;
     }
 
     this.audioInitializing = false;
+  }
+
+  applyAudioReactiveModulation() {
+    if (!this.audioAnalyzer || !this.audioAnalyzer.isRunning) return;
+
+    this.audioFeatures = this.audioAnalyzer.getFeatures();
+    const { rms, bass, mid, treble, beat } = this.audioFeatures;
+
+    // Lightweight v1 mapping: modulate existing flock params with clamped ranges.
+    this.params.maxSpeed = 6 + bass * 4;
+    this.params.matchingFactor = 0.03 + mid * 0.1;
+    this.params.avoidFactor = 0.03 + treble * 0.1;
+    this.params.turnFactor = 0.12 + beat * 0.2;
+    this.params.particleSize = 2.2 + rms * 3.2;
+    this.params.maxDistance = 180 + treble * 180;
   }
 
   applyAudioReactiveModulation() {
