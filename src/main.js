@@ -1,6 +1,7 @@
 import Stats from 'stats.js';
 import { SceneManager } from './scene/SceneManager.js';
 import { Flock } from './boids/Flock.js';
+import { RustFlockAdapter } from './boids/RustFlockAdapter.js';
 import { FlockRenderer } from './boids/FlockRenderer.js';
 import { GUIControls } from './controls/GUIControls.js';
 import { AudioAnalyzer } from './audio/AudioAnalyzer.js';
@@ -12,6 +13,15 @@ class MurmurationSimulator {
 
     this.isPaused = false;
     this.time = 0;
+    this.flockBackend = 'js';
+
+    this.benchmarkEnabled = false;
+    this.benchmark = {
+      frames: 0,
+      simMs: 0,
+      frameMs: 0,
+      lastReportAt: performance.now()
+    };
 
     this.audioAnalyzer = null;
     this.audioInitializing = false;
@@ -27,11 +37,22 @@ class MurmurationSimulator {
     this.noAudioFrames = 0;
 
     this.initScene();
-    this.initFlock();
+  }
+
+  async initialize() {
+    await this.initFlock();
     this.initGUI();
     this.initStats();
     this.initKeyboard();
     this.initAudioLinkButton();
+
+    this.showStatus(
+      this.flockBackend === 'rust'
+        ? '🦀 Rust/WASM flock core active. Press B for benchmark overlay logs.'
+        : '⚠️ JS flock fallback active. Build rust/boids-wasm/pkg to enable Rust core.',
+      this.flockBackend !== 'rust',
+      4200
+    );
 
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
@@ -143,12 +164,23 @@ class MurmurationSimulator {
     this.sceneManager = new SceneManager(container);
   }
 
-  initFlock() {
-    this.flock = new Flock(
-      this.params.birdCount,
-      this.params.bounds,
-      this.params
-    );
+  async initFlock() {
+    try {
+      this.flock = await RustFlockAdapter.create(
+        this.params.birdCount,
+        this.params.bounds,
+        this.params
+      );
+      this.flockBackend = 'rust';
+    } catch (error) {
+      console.warn('Rust/WASM flock unavailable, falling back to JS Flock:', error);
+      this.flock = new Flock(
+        this.params.birdCount,
+        this.params.bounds,
+        this.params
+      );
+      this.flockBackend = 'js';
+    }
 
     this.flockRenderer = new FlockRenderer(
       this.sceneManager.scene,
@@ -208,6 +240,44 @@ class MurmurationSimulator {
     document.body.appendChild(this.stats.dom);
   }
 
+  toggleBenchmark() {
+    this.benchmarkEnabled = !this.benchmarkEnabled;
+    this.benchmark.frames = 0;
+    this.benchmark.simMs = 0;
+    this.benchmark.frameMs = 0;
+    this.benchmark.lastReportAt = performance.now();
+
+    this.showStatus(
+      this.benchmarkEnabled
+        ? `📊 Benchmark ON (${this.flockBackend.toUpperCase()} core). Logging every ~120 frames.`
+        : '📊 Benchmark OFF',
+      false,
+      2600
+    );
+  }
+
+  maybeReportBenchmark() {
+    if (!this.benchmarkEnabled || this.benchmark.frames < 120) return;
+
+    const avgSim = this.benchmark.simMs / this.benchmark.frames;
+    const avgFrame = this.benchmark.frameMs / this.benchmark.frames;
+    const elapsed = performance.now() - this.benchmark.lastReportAt;
+    const fps = elapsed > 0 ? (this.benchmark.frames * 1000) / elapsed : 0;
+
+    console.info('[Benchmark]', {
+      backend: this.flockBackend,
+      birds: this.flock.count,
+      avgSimulationMs: Number(avgSim.toFixed(3)),
+      avgFrameMs: Number(avgFrame.toFixed(3)),
+      approxFps: Number(fps.toFixed(1))
+    });
+
+    this.benchmark.frames = 0;
+    this.benchmark.simMs = 0;
+    this.benchmark.frameMs = 0;
+    this.benchmark.lastReportAt = performance.now();
+  }
+
   initKeyboard() {
     window.addEventListener('keydown', (e) => {
       switch (e.code) {
@@ -230,8 +300,8 @@ class MurmurationSimulator {
         case 'KeyM':
           this.initAudioAnalyzer();
           break;
-        case 'KeyM':
-          this.initAudioAnalyzer();
+        case 'KeyB':
+          this.toggleBenchmark();
           break;
       }
     });
@@ -279,23 +349,36 @@ class MurmurationSimulator {
   animate(timestamp) {
     requestAnimationFrame(this.animate);
 
+    const frameStart = performance.now();
     this.stats.begin();
     this.time = timestamp * 0.001;
 
     if (!this.isPaused) {
       this.applyAudioReactiveModulation();
+      const simStart = performance.now();
       this.flock.update(this.params);
       this.flockRenderer.update(this.time);
+
+      if (this.benchmarkEnabled) {
+        this.benchmark.simMs += performance.now() - simStart;
+      }
     }
 
     this.sceneManager.update();
     this.sceneManager.render();
     this.stats.end();
+
+    if (this.benchmarkEnabled) {
+      this.benchmark.frames += 1;
+      this.benchmark.frameMs += performance.now() - frameStart;
+      this.maybeReportBenchmark();
+    }
   }
 
   dispose() {
     if (this.audioAnalyzer) {
       this.audioAnalyzer.dispose();
+      this.audioAnalyzer = null;
     }
 
     if (this.audioLinkButton) {
@@ -303,15 +386,7 @@ class MurmurationSimulator {
       this.audioLinkButton = null;
     }
 
-    if (this.audioAnalyzer) {
-      this.audioAnalyzer.dispose();
-    }
-
-    if (this.audioLinkButton) {
-      this.audioLinkButton.remove();
-      this.audioLinkButton = null;
     this.noAudioFrames = 0;
-    }
   }
 }
 
@@ -321,10 +396,16 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
+const startSimulator = async () => {
+  const simulator = new MurmurationSimulator();
+  await simulator.initialize();
+  window.simulator = simulator;
+};
+
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    window.simulator = new MurmurationSimulator();
+    startSimulator();
   });
 } else {
-  window.simulator = new MurmurationSimulator();
+  startSimulator();
 }
