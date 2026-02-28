@@ -25,6 +25,15 @@ wasm-pack build rust/boids-wasm --target web --out-dir pkg
 
 This generates `rust/boids-wasm/pkg/boids_wasm.js` + `.wasm` artifacts.
 
+## Vercel setup (auto-build wasm)
+
+This repo includes:
+
+- `scripts/build-wasm.sh`: installs required Rust/wasm tooling (if missing), builds `rust/boids-wasm/pkg`, then copies it to `public/rust/boids-wasm/pkg`
+- `vercel.json`: sets `buildCommand` to `npm run vercel-build`
+
+So a standard Vercel deploy now runs wasm generation automatically as part of build.
+
 ## Runtime behavior
 
 - `main.js` now attempts to start with Rust/WASM first.
@@ -43,5 +52,5 @@ This generates `rust/boids-wasm/pkg/boids_wasm.js` + `.wasm` artifacts.
 
 ## Notes
 
-- Initial wasm build is still a manual step.
+- `npm run build` now triggers wasm generation automatically via `scripts/build-wasm.sh`.
 - For best comparisons, benchmark with fixed bird counts and camera position across both backends.

@@ -106,6 +106,22 @@ The simulation uses several optimization techniques:
 3. **Buffer Reuse**: Float32Arrays are reused to minimize allocations
 4. **Additive Blending**: Beautiful glow effect with minimal overdraw cost
 
+## Vercel + Rust/WASM build
+
+This project is configured so `npm run build` now does both:
+
+1. Builds `rust/boids-wasm/pkg` with `wasm-pack`
+2. Copies generated artifacts to `public/rust/boids-wasm/pkg`
+3. Runs `vite build`
+
+On Vercel, `vercel.json` sets `buildCommand` to `npm run vercel-build`, which runs the same flow.
+
+If you need a temporary local skip (for network-restricted environments), run:
+
+```bash
+SKIP_WASM_BUILD=1 npm run build
+```
+
 ## Deployment Notes
 
 - The Vite `base` path defaults to `/` (works for Vercel-style root deployments).
