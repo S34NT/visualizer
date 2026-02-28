@@ -39,6 +39,7 @@ npm run build
 - **S**: Take screenshot
 - **H**: Hide/show GUI
 - **M**: Link a YouTube video and start tab-audio reactivity
+- **B**: Toggle benchmark logging (prints frame/simulation timing in console)
 
 ### Touch / Mobile
 - **🎵 Link YouTube Audio button** (bottom-left): Opens URL prompt and starts YouTube tab-audio linking flow
