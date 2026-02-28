@@ -120,6 +120,7 @@ impl FlockSim {
         }
 
         self.positions.resize(new_count * 3, 0.0);
+        self.write_positions();
     }
 
     pub fn reset(&mut self) {
@@ -197,12 +198,17 @@ impl FlockSim {
         for (idx, boid) in self.boids.iter_mut().enumerate() {
             boid.velocity = next_velocities[idx];
             boid.position.add_assign(boid.velocity);
-
-            let out = idx * 3;
-            self.positions[out] = boid.position.x;
-            self.positions[out + 1] = boid.position.y;
-            self.positions[out + 2] = boid.position.z;
         }
+
+        self.write_positions();
+    }
+
+    pub fn positions_ptr(&self) -> *const f32 {
+        self.positions.as_ptr()
+    }
+
+    pub fn positions_len(&self) -> usize {
+        self.positions.len()
     }
 
     pub fn positions(&self) -> Vec<f32> {
@@ -219,6 +225,10 @@ impl FlockSim {
             self.boids.push(self.make_random_boid());
         }
 
+        self.write_positions();
+    }
+
+    fn write_positions(&mut self) {
         for (idx, boid) in self.boids.iter().enumerate() {
             let out = idx * 3;
             self.positions[out] = boid.position.x;
