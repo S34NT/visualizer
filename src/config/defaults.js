@@ -1,47 +1,34 @@
 // Default simulation parameters based on biological research
 export const defaults = {
   // Flocking behavior
-  visualRange: 40,          // Neighbor detection radius
-  protectedRange: 8,        // Personal space radius
-  centeringFactor: 0.0005,  // Cohesion strength
-  avoidFactor: 0.05,        // Separation strength
-  matchingFactor: 0.05,     // Alignment strength
-  
+  visualRange: 40,
+  protectedRange: 8,
+  centeringFactor: 0.0005,
+  avoidFactor: 0.05,
+  matchingFactor: 0.05,
+
   // Movement constraints
-  maxSpeed: 6,              // Maximum velocity
-  minSpeed: 3,              // Minimum velocity
-  turnFactor: 0.2,          // Boundary avoidance strength
-  margin: 50,               // Distance from boundary to start turning
-  
+  maxSpeed: 6,
+  minSpeed: 3,
+  turnFactor: 0.2,
+  margin: 50,
+
   // Simulation size
-  birdCount: 1000,          // Initial number of birds
-  bounds: 150,              // Half-size of the simulation cube
-  
+  birdCount: 1000,
+  bounds: 150,
+
   // Visualization
-  particleSize: 3.0,        // Size of each bird particle
-  maxDistance: 200,         // Max distance for color mapping
-  
+  particleSize: 3.0,
+  maxDistance: 200,
+
   // Performance
   targetFPS: 60,
-  minFPS: 30,
-  
-  // Hand/Face Tracking
-  trackingEnabled: false,      // Enable webcam tracking
-  showPreview: true,           // Show tracking preview window
-  attractionStrength: 0.15,    // How strongly boids are attracted to hands/face
-  attractionRange: 200,        // Range within which attraction works
-  handAttractionStrength: 1.0, // Multiplier for hand attraction
-  faceAttractionStrength: 0.5, // Multiplier for face attraction (less than hands)
-  orbitEnabled: true,          // Enable swirling orbit behavior
-  orbitStrength: 0.08,         // Strength of orbit/swirl effect
-  trackingScale: 200,          // Scale factor for mapping camera to simulation
-  depthScale: 100              // Z-axis depth scale for tracking
+  minFPS: 30
 };
 
-// Preset configurations
 export const presets = {
   default: { ...defaults },
-  
+
   tightSwarm: {
     ...defaults,
     visualRange: 30,
@@ -51,7 +38,7 @@ export const presets = {
     matchingFactor: 0.08,
     birdCount: 2000
   },
-  
+
   looseFlock: {
     ...defaults,
     visualRange: 60,
@@ -61,7 +48,7 @@ export const presets = {
     matchingFactor: 0.03,
     birdCount: 500
   },
-  
+
   chaotic: {
     ...defaults,
     visualRange: 25,
@@ -73,7 +60,7 @@ export const presets = {
     minSpeed: 5,
     birdCount: 1500
   },
-  
+
   massive: {
     ...defaults,
     visualRange: 35,
@@ -82,48 +69,5 @@ export const presets = {
     avoidFactor: 0.04,
     matchingFactor: 0.04,
     birdCount: 5000
-  },
-  
-  // Tracking-optimized presets
-  handFollow: {
-    ...defaults,
-    birdCount: 1500,
-    trackingEnabled: true,
-    attractionStrength: 0.2,
-    attractionRange: 250,
-    orbitEnabled: true,
-    orbitStrength: 0.1,
-    visualRange: 35,
-    centeringFactor: 0.0003
-  },
-  
-  gentleOrbit: {
-    ...defaults,
-    birdCount: 2000,
-    trackingEnabled: true,
-    attractionStrength: 0.08,
-    attractionRange: 300,
-    orbitEnabled: true,
-    orbitStrength: 0.15,
-    visualRange: 45,
-    maxSpeed: 4,
-    minSpeed: 2
-  },
-  
-  intenseSwarm: {
-    ...defaults,
-    birdCount: 3000,
-    trackingEnabled: true,
-    attractionStrength: 0.3,
-    attractionRange: 200,
-    orbitEnabled: false,
-    visualRange: 25,
-    protectedRange: 5,
-    maxSpeed: 8,
-    minSpeed: 4
   }
 };
-
-
-
-
