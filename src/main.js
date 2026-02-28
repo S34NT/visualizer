@@ -230,6 +230,9 @@ class MurmurationSimulator {
         case 'KeyM':
           this.initAudioAnalyzer();
           break;
+        case 'KeyM':
+          this.initAudioAnalyzer();
+          break;
       }
     });
   }
@@ -298,6 +301,16 @@ class MurmurationSimulator {
     if (this.audioLinkButton) {
       this.audioLinkButton.remove();
       this.audioLinkButton = null;
+    }
+
+    if (this.audioAnalyzer) {
+      this.audioAnalyzer.dispose();
+    }
+
+    if (this.audioLinkButton) {
+      this.audioLinkButton.remove();
+      this.audioLinkButton = null;
+    this.noAudioFrames = 0;
     }
   }
 }
