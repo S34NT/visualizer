@@ -166,27 +166,37 @@ class MurmurationSimulator {
 
   async initFlock() {
     try {
-      this.flock = await RustFlockAdapter.create(
+      const rustFlock = await RustFlockAdapter.create(
         this.params.birdCount,
         this.params.bounds,
         this.params
       );
+
+      const rustRenderer = new FlockRenderer(
+        this.sceneManager.scene,
+        rustFlock,
+        this.params
+      );
+
+      this.flock = rustFlock;
+      this.flockRenderer = rustRenderer;
       this.flockBackend = 'rust';
     } catch (error) {
       console.warn('Rust/WASM flock unavailable, falling back to JS Flock:', error);
+
       this.flock = new Flock(
         this.params.birdCount,
         this.params.bounds,
         this.params
       );
+
+      this.flockRenderer = new FlockRenderer(
+        this.sceneManager.scene,
+        this.flock,
+        this.params
+      );
       this.flockBackend = 'js';
     }
-
-    this.flockRenderer = new FlockRenderer(
-      this.sceneManager.scene,
-      this.flock,
-      this.params
-    );
   }
 
   initGUI() {

@@ -15,16 +15,18 @@ async function loadWasmModule() {
 export class RustFlockAdapter {
   static async create(count, bounds, params) {
     const wasmModule = await loadWasmModule();
+    let wasmExports = null;
     if (typeof wasmModule.default === 'function') {
-      await wasmModule.default();
+      wasmExports = await wasmModule.default();
     }
-    return new RustFlockAdapter(count, bounds, params, wasmModule);
+    return new RustFlockAdapter(count, bounds, params, wasmModule, wasmExports);
   }
 
-  constructor(count, bounds, params, wasmModule) {
+  constructor(count, bounds, params, wasmModule, wasmExports = null) {
     this.bounds = bounds;
     this.params = { ...params };
     this.wasm = wasmModule;
+    this.wasmExports = wasmExports;
     this.sim = new this.wasm.FlockSim(count, bounds, this.#toSimParams(params));
     this.positionsView = null;
   }
@@ -46,18 +48,32 @@ export class RustFlockAdapter {
     this.sim.update();
   }
 
+
+  #getMemoryBuffer() {
+    return (
+      this.wasmExports?.memory?.buffer ||
+      this.wasm?.memory?.buffer ||
+      null
+    );
+  }
+
   getPositionsView() {
     const ptr = this.sim.positions_ptr();
     const len = this.sim.positions_len();
     const byteOffset = ptr;
+    const memoryBuffer = this.#getMemoryBuffer();
+
+    if (!memoryBuffer) {
+      return this.sim.positions();
+    }
 
     if (
       !this.positionsView ||
       this.positionsView.length !== len ||
       this.positionsView.byteOffset !== byteOffset ||
-      this.positionsView.buffer !== this.wasm.memory.buffer
+      this.positionsView.buffer !== memoryBuffer
     ) {
-      this.positionsView = new Float32Array(this.wasm.memory.buffer, byteOffset, len);
+      this.positionsView = new Float32Array(memoryBuffer, byteOffset, len);
     }
 
     return this.positionsView;
