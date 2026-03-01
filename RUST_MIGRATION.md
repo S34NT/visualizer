@@ -54,3 +54,9 @@ So a standard Vercel deploy now runs wasm generation automatically as part of bu
 
 - `npm run build` now triggers wasm generation automatically via `scripts/build-wasm.sh`.
 - For best comparisons, benchmark with fixed bird counts and camera position across both backends.
+
+## SIMD integration
+
+- `FlockSim` now includes a SIMD-enabled integration path for velocity/position application when compiled for `wasm32` with `simd128`.
+- A scalar fallback path is retained for compatibility.
+- Runtime benchmark logs now include `variant` (`rust-simd`, `rust-scalar`, or `js`) to simplify A/B testing.

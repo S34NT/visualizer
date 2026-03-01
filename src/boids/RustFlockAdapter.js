@@ -88,6 +88,10 @@ export class RustFlockAdapter {
     return this.sim.count();
   }
 
+  isSimdEnabled() {
+    return typeof this.sim.simd_enabled === "function" ? this.sim.simd_enabled() : false;
+  }
+
   #didParamsChange(next) {
     return (
       next.visualRange !== this.params.visualRange ||

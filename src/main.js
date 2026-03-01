@@ -14,6 +14,7 @@ class MurmurationSimulator {
     this.isPaused = false;
     this.time = 0;
     this.flockBackend = 'js';
+    this.backendVariant = 'js';
 
     this.benchmarkEnabled = false;
     this.benchmark = {
@@ -181,6 +182,7 @@ class MurmurationSimulator {
       this.flock = rustFlock;
       this.flockRenderer = rustRenderer;
       this.flockBackend = 'rust';
+      this.backendVariant = rustFlock.isSimdEnabled?.() ? 'rust-simd' : 'rust-scalar';
     } catch (error) {
       console.warn('Rust/WASM flock unavailable, falling back to JS Flock:', error);
 
@@ -196,6 +198,7 @@ class MurmurationSimulator {
         this.params
       );
       this.flockBackend = 'js';
+      this.backendVariant = 'js';
     }
   }
 
@@ -276,6 +279,7 @@ class MurmurationSimulator {
 
     console.info('[Benchmark]', {
       backend: this.flockBackend,
+      variant: this.backendVariant || this.flockBackend,
       birds: this.flock.count,
       avgSimulationMs: Number(avgSim.toFixed(3)),
       avgFrameMs: Number(avgFrame.toFixed(3)),
