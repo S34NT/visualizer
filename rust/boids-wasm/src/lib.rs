@@ -44,46 +44,22 @@ impl SimParams {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-struct Vec3 {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-
-impl Vec3 {
-    fn length(self) -> f32 {
-        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
-    }
-
-    fn add_assign(&mut self, rhs: Vec3) {
-        self.x += rhs.x;
-        self.y += rhs.y;
-        self.z += rhs.z;
-    }
-
-    fn scale_assign(&mut self, factor: f32) {
-        self.x *= factor;
-        self.y *= factor;
-        self.z *= factor;
-    }
-}
-
-#[derive(Clone, Copy)]
-struct Boid {
-    position: Vec3,
-    velocity: Vec3,
-}
-
 type CellKey = (i32, i32, i32);
 
 #[wasm_bindgen]
 pub struct FlockSim {
-    boids: Vec<Boid>,
+    pos_x: Vec<f32>,
+    pos_y: Vec<f32>,
+    pos_z: Vec<f32>,
+    vel_x: Vec<f32>,
+    vel_y: Vec<f32>,
+    vel_z: Vec<f32>,
+    next_vel_x: Vec<f32>,
+    next_vel_y: Vec<f32>,
+    next_vel_z: Vec<f32>,
     bounds: f32,
     params: SimParams,
     positions: Vec<f32>,
-    next_velocities: Vec<Vec3>,
     neighbor_scratch: Vec<usize>,
     cells: HashMap<CellKey, Vec<usize>>,
     cell_size: f32,
@@ -94,10 +70,17 @@ impl FlockSim {
     #[wasm_bindgen(constructor)]
     pub fn new(count: usize, bounds: f32, params: SimParams) -> FlockSim {
         let mut sim = FlockSim {
-            boids: Vec::with_capacity(count),
+            pos_x: Vec::with_capacity(count),
+            pos_y: Vec::with_capacity(count),
+            pos_z: Vec::with_capacity(count),
+            vel_x: Vec::with_capacity(count),
+            vel_y: Vec::with_capacity(count),
+            vel_z: Vec::with_capacity(count),
+            next_vel_x: vec![0.0; count],
+            next_vel_y: vec![0.0; count],
+            next_vel_z: vec![0.0; count],
             bounds,
             positions: vec![0.0; count * 3],
-            next_velocities: vec![Vec3::default(); count],
             neighbor_scratch: Vec::new(),
             cell_size: params.visual_range.max(1.0),
             cells: HashMap::new(),
@@ -114,26 +97,46 @@ impl FlockSim {
     }
 
     pub fn set_count(&mut self, new_count: usize) {
-        let current = self.boids.len();
+        let current = self.count();
         if new_count > current {
+            self.pos_x.reserve(new_count - current);
+            self.pos_y.reserve(new_count - current);
+            self.pos_z.reserve(new_count - current);
+            self.vel_x.reserve(new_count - current);
+            self.vel_y.reserve(new_count - current);
+            self.vel_z.reserve(new_count - current);
+
             for _ in current..new_count {
-                self.boids.push(self.make_random_boid());
+                let (px, py, pz, vx, vy, vz) = self.make_random_boid();
+                self.pos_x.push(px);
+                self.pos_y.push(py);
+                self.pos_z.push(pz);
+                self.vel_x.push(vx);
+                self.vel_y.push(vy);
+                self.vel_z.push(vz);
             }
         } else {
-            self.boids.truncate(new_count);
+            self.pos_x.truncate(new_count);
+            self.pos_y.truncate(new_count);
+            self.pos_z.truncate(new_count);
+            self.vel_x.truncate(new_count);
+            self.vel_y.truncate(new_count);
+            self.vel_z.truncate(new_count);
         }
 
         self.positions.resize(new_count * 3, 0.0);
-        self.next_velocities.resize(new_count, Vec3::default());
+        self.next_vel_x.resize(new_count, 0.0);
+        self.next_vel_y.resize(new_count, 0.0);
+        self.next_vel_z.resize(new_count, 0.0);
         self.write_positions();
     }
 
     pub fn reset(&mut self) {
-        self.initialize_boids(self.boids.len());
+        self.initialize_boids(self.count());
     }
 
     pub fn count(&self) -> usize {
-        self.boids.len()
+        self.pos_x.len()
     }
 
     pub fn update(&mut self) {
@@ -142,21 +145,31 @@ impl FlockSim {
         let vis_sq = self.params.visual_range * self.params.visual_range;
         let protected_sq = self.params.protected_range * self.params.protected_range;
 
-        if self.next_velocities.len() != self.boids.len() {
-            self.next_velocities
-                .resize(self.boids.len(), Vec3::default());
+        let boid_count = self.count();
+        if self.next_vel_x.len() != boid_count {
+            self.next_vel_x.resize(boid_count, 0.0);
+            self.next_vel_y.resize(boid_count, 0.0);
+            self.next_vel_z.resize(boid_count, 0.0);
         }
 
         let mut neighbors = std::mem::take(&mut self.neighbor_scratch);
 
-        for i in 0..self.boids.len() {
-            let boid = self.boids[i];
+        for i in 0..boid_count {
+            let px = self.pos_x[i];
+            let py = self.pos_y[i];
+            let pz = self.pos_z[i];
             neighbors.clear();
-            self.collect_neighbor_indices(boid.position, &mut neighbors);
+            self.collect_neighbor_indices(px, py, pz, &mut neighbors);
 
-            let mut close = Vec3::default();
-            let mut avg_vel = Vec3::default();
-            let mut avg_pos = Vec3::default();
+            let mut close_x = 0.0;
+            let mut close_y = 0.0;
+            let mut close_z = 0.0;
+            let mut avg_vx = 0.0;
+            let mut avg_vy = 0.0;
+            let mut avg_vz = 0.0;
+            let mut avg_px = 0.0;
+            let mut avg_py = 0.0;
+            let mut avg_pz = 0.0;
             let mut count = 0.0_f32;
 
             for &n_idx in &neighbors {
@@ -164,54 +177,67 @@ impl FlockSim {
                     continue;
                 }
 
-                let other = self.boids[n_idx];
-                let dx = boid.position.x - other.position.x;
-                let dy = boid.position.y - other.position.y;
-                let dz = boid.position.z - other.position.z;
+                let dx = px - self.pos_x[n_idx];
+                let dy = py - self.pos_y[n_idx];
+                let dz = pz - self.pos_z[n_idx];
                 let dist_sq = dx * dx + dy * dy + dz * dz;
 
                 if dist_sq < protected_sq && dist_sq > 0.0 {
-                    close.x += dx;
-                    close.y += dy;
-                    close.z += dz;
+                    close_x += dx;
+                    close_y += dy;
+                    close_z += dz;
                 }
 
                 if dist_sq < vis_sq {
-                    avg_vel.add_assign(other.velocity);
-                    avg_pos.add_assign(other.position);
+                    avg_vx += self.vel_x[n_idx];
+                    avg_vy += self.vel_y[n_idx];
+                    avg_vz += self.vel_z[n_idx];
+                    avg_px += self.pos_x[n_idx];
+                    avg_py += self.pos_y[n_idx];
+                    avg_pz += self.pos_z[n_idx];
                     count += 1.0;
                 }
             }
 
-            let mut velocity = boid.velocity;
-
-            velocity.x += close.x * self.params.avoid_factor;
-            velocity.y += close.y * self.params.avoid_factor;
-            velocity.z += close.z * self.params.avoid_factor;
+            let mut vx = self.vel_x[i] + close_x * self.params.avoid_factor;
+            let mut vy = self.vel_y[i] + close_y * self.params.avoid_factor;
+            let mut vz = self.vel_z[i] + close_z * self.params.avoid_factor;
 
             if count > 0.0 {
-                avg_vel.scale_assign(1.0 / count);
-                avg_pos.scale_assign(1.0 / count);
+                let inv_count = 1.0 / count;
+                avg_vx *= inv_count;
+                avg_vy *= inv_count;
+                avg_vz *= inv_count;
+                avg_px *= inv_count;
+                avg_py *= inv_count;
+                avg_pz *= inv_count;
 
-                velocity.x += (avg_vel.x - velocity.x) * self.params.matching_factor;
-                velocity.y += (avg_vel.y - velocity.y) * self.params.matching_factor;
-                velocity.z += (avg_vel.z - velocity.z) * self.params.matching_factor;
+                vx += (avg_vx - vx) * self.params.matching_factor;
+                vy += (avg_vy - vy) * self.params.matching_factor;
+                vz += (avg_vz - vz) * self.params.matching_factor;
 
-                velocity.x += (avg_pos.x - boid.position.x) * self.params.centering_factor;
-                velocity.y += (avg_pos.y - boid.position.y) * self.params.centering_factor;
-                velocity.z += (avg_pos.z - boid.position.z) * self.params.centering_factor;
+                vx += (avg_px - px) * self.params.centering_factor;
+                vy += (avg_py - py) * self.params.centering_factor;
+                vz += (avg_pz - pz) * self.params.centering_factor;
             }
 
-            self.avoid_boundaries(boid.position, &mut velocity);
-            self.limit_speed(&mut velocity);
-            self.next_velocities[i] = velocity;
+            self.avoid_boundaries(px, py, pz, &mut vx, &mut vy, &mut vz);
+            self.limit_speed(&mut vx, &mut vy, &mut vz);
+
+            self.next_vel_x[i] = vx;
+            self.next_vel_y[i] = vy;
+            self.next_vel_z[i] = vz;
         }
 
         self.neighbor_scratch = neighbors;
 
-        for (idx, boid) in self.boids.iter_mut().enumerate() {
-            boid.velocity = self.next_velocities[idx];
-            boid.position.add_assign(boid.velocity);
+        for i in 0..boid_count {
+            self.vel_x[i] = self.next_vel_x[i];
+            self.vel_y[i] = self.next_vel_y[i];
+            self.vel_z[i] = self.next_vel_z[i];
+            self.pos_x[i] += self.vel_x[i];
+            self.pos_y[i] += self.vel_y[i];
+            self.pos_z[i] += self.vel_z[i];
         }
 
         self.write_positions();
@@ -232,26 +258,47 @@ impl FlockSim {
 
 impl FlockSim {
     fn initialize_boids(&mut self, count: usize) {
-        self.boids.clear();
-        self.boids.reserve(count);
+        self.pos_x.clear();
+        self.pos_y.clear();
+        self.pos_z.clear();
+        self.vel_x.clear();
+        self.vel_y.clear();
+        self.vel_z.clear();
+
+        self.pos_x.reserve(count);
+        self.pos_y.reserve(count);
+        self.pos_z.reserve(count);
+        self.vel_x.reserve(count);
+        self.vel_y.reserve(count);
+        self.vel_z.reserve(count);
 
         for _ in 0..count {
-            self.boids.push(self.make_random_boid());
+            let (px, py, pz, vx, vy, vz) = self.make_random_boid();
+            self.pos_x.push(px);
+            self.pos_y.push(py);
+            self.pos_z.push(pz);
+            self.vel_x.push(vx);
+            self.vel_y.push(vy);
+            self.vel_z.push(vz);
         }
 
+        self.next_vel_x.resize(count, 0.0);
+        self.next_vel_y.resize(count, 0.0);
+        self.next_vel_z.resize(count, 0.0);
+        self.positions.resize(count * 3, 0.0);
         self.write_positions();
     }
 
     fn write_positions(&mut self) {
-        for (idx, boid) in self.boids.iter().enumerate() {
+        for idx in 0..self.count() {
             let out = idx * 3;
-            self.positions[out] = boid.position.x;
-            self.positions[out + 1] = boid.position.y;
-            self.positions[out + 2] = boid.position.z;
+            self.positions[out] = self.pos_x[idx];
+            self.positions[out + 1] = self.pos_y[idx];
+            self.positions[out + 2] = self.pos_z[idx];
         }
     }
 
-    fn make_random_boid(&self) -> Boid {
+    fn make_random_boid(&self) -> (f32, f32, f32, f32, f32, f32) {
         let scale = self.bounds * 0.8;
         let random_position = || (Math::random() as f32 - 0.5) * 2.0 * scale;
 
@@ -264,38 +311,34 @@ impl FlockSim {
         vy = (vy / mag) * speed;
         vz = (vz / mag) * speed;
 
-        Boid {
-            position: Vec3 {
-                x: random_position(),
-                y: random_position(),
-                z: random_position(),
-            },
-            velocity: Vec3 {
-                x: vx,
-                y: vy,
-                z: vz,
-            },
-        }
+        (
+            random_position(),
+            random_position(),
+            random_position(),
+            vx,
+            vy,
+            vz,
+        )
     }
 
     fn rebuild_spatial_grid(&mut self) {
         self.cells.clear();
-        for (idx, boid) in self.boids.iter().enumerate() {
-            let key = self.cell_key(boid.position);
+        for idx in 0..self.count() {
+            let key = self.cell_key(self.pos_x[idx], self.pos_y[idx], self.pos_z[idx]);
             self.cells.entry(key).or_default().push(idx);
         }
     }
 
-    fn cell_key(&self, position: Vec3) -> CellKey {
+    fn cell_key(&self, x: f32, y: f32, z: f32) -> CellKey {
         (
-            (position.x / self.cell_size).floor() as i32,
-            (position.y / self.cell_size).floor() as i32,
-            (position.z / self.cell_size).floor() as i32,
+            (x / self.cell_size).floor() as i32,
+            (y / self.cell_size).floor() as i32,
+            (z / self.cell_size).floor() as i32,
         )
     }
 
-    fn collect_neighbor_indices(&self, position: Vec3, out: &mut Vec<usize>) {
-        let (cx, cy, cz) = self.cell_key(position);
+    fn collect_neighbor_indices(&self, x: f32, y: f32, z: f32, out: &mut Vec<usize>) {
+        let (cx, cy, cz) = self.cell_key(x, y, z);
 
         for dx in -1..=1 {
             for dy in -1..=1 {
@@ -308,37 +351,51 @@ impl FlockSim {
         }
     }
 
-    fn avoid_boundaries(&self, position: Vec3, velocity: &mut Vec3) {
+    fn avoid_boundaries(
+        &self,
+        px: f32,
+        py: f32,
+        pz: f32,
+        vx: &mut f32,
+        vy: &mut f32,
+        vz: &mut f32,
+    ) {
         let b = self.bounds;
         let m = self.params.margin;
         let t = self.params.turn_factor;
 
-        if position.x < -b + m {
-            velocity.x += t;
-        } else if position.x > b - m {
-            velocity.x -= t;
+        if px < -b + m {
+            *vx += t;
+        } else if px > b - m {
+            *vx -= t;
         }
 
-        if position.y < -b + m {
-            velocity.y += t;
-        } else if position.y > b - m {
-            velocity.y -= t;
+        if py < -b + m {
+            *vy += t;
+        } else if py > b - m {
+            *vy -= t;
         }
 
-        if position.z < -b + m {
-            velocity.z += t;
-        } else if position.z > b - m {
-            velocity.z -= t;
+        if pz < -b + m {
+            *vz += t;
+        } else if pz > b - m {
+            *vz -= t;
         }
     }
 
-    fn limit_speed(&self, velocity: &mut Vec3) {
-        let speed = velocity.length();
+    fn limit_speed(&self, vx: &mut f32, vy: &mut f32, vz: &mut f32) {
+        let speed = (*vx * *vx + *vy * *vy + *vz * *vz).sqrt();
 
         if speed > 0.0 && speed < self.params.min_speed {
-            velocity.scale_assign(self.params.min_speed / speed);
+            let scale = self.params.min_speed / speed;
+            *vx *= scale;
+            *vy *= scale;
+            *vz *= scale;
         } else if speed > self.params.max_speed {
-            velocity.scale_assign(self.params.max_speed / speed);
+            let scale = self.params.max_speed / speed;
+            *vx *= scale;
+            *vy *= scale;
+            *vz *= scale;
         }
     }
 }
