@@ -2,6 +2,9 @@ use js_sys::Math;
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
+#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+use core::arch::wasm32::{f32x4_add, v128, v128_load, v128_store};
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct SimParams {
@@ -231,15 +234,7 @@ impl FlockSim {
 
         self.neighbor_scratch = neighbors;
 
-        for i in 0..boid_count {
-            self.vel_x[i] = self.next_vel_x[i];
-            self.vel_y[i] = self.next_vel_y[i];
-            self.vel_z[i] = self.next_vel_z[i];
-            self.pos_x[i] += self.vel_x[i];
-            self.pos_y[i] += self.vel_y[i];
-            self.pos_z[i] += self.vel_z[i];
-        }
-
+        self.integrate_velocities_and_positions(boid_count);
         self.write_positions();
     }
 
@@ -253,6 +248,10 @@ impl FlockSim {
 
     pub fn positions(&self) -> Vec<f32> {
         self.positions.clone()
+    }
+
+    pub fn simd_enabled(&self) -> bool {
+        cfg!(all(target_arch = "wasm32", target_feature = "simd128"))
     }
 }
 
@@ -348,6 +347,62 @@ impl FlockSim {
                     }
                 }
             }
+        }
+    }
+
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    fn integrate_velocities_and_positions(&mut self, boid_count: usize) {
+        let mut i = 0;
+        while i + 4 <= boid_count {
+            unsafe {
+                let next_vx = v128_load(self.next_vel_x.as_ptr().add(i) as *const v128);
+                let next_vy = v128_load(self.next_vel_y.as_ptr().add(i) as *const v128);
+                let next_vz = v128_load(self.next_vel_z.as_ptr().add(i) as *const v128);
+
+                v128_store(self.vel_x.as_mut_ptr().add(i) as *mut v128, next_vx);
+                v128_store(self.vel_y.as_mut_ptr().add(i) as *mut v128, next_vy);
+                v128_store(self.vel_z.as_mut_ptr().add(i) as *mut v128, next_vz);
+
+                let pos_x = v128_load(self.pos_x.as_ptr().add(i) as *const v128);
+                let pos_y = v128_load(self.pos_y.as_ptr().add(i) as *const v128);
+                let pos_z = v128_load(self.pos_z.as_ptr().add(i) as *const v128);
+
+                v128_store(
+                    self.pos_x.as_mut_ptr().add(i) as *mut v128,
+                    f32x4_add(pos_x, next_vx),
+                );
+                v128_store(
+                    self.pos_y.as_mut_ptr().add(i) as *mut v128,
+                    f32x4_add(pos_y, next_vy),
+                );
+                v128_store(
+                    self.pos_z.as_mut_ptr().add(i) as *mut v128,
+                    f32x4_add(pos_z, next_vz),
+                );
+            }
+            i += 4;
+        }
+
+        while i < boid_count {
+            self.vel_x[i] = self.next_vel_x[i];
+            self.vel_y[i] = self.next_vel_y[i];
+            self.vel_z[i] = self.next_vel_z[i];
+            self.pos_x[i] += self.vel_x[i];
+            self.pos_y[i] += self.vel_y[i];
+            self.pos_z[i] += self.vel_z[i];
+            i += 1;
+        }
+    }
+
+    #[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+    fn integrate_velocities_and_positions(&mut self, boid_count: usize) {
+        for i in 0..boid_count {
+            self.vel_x[i] = self.next_vel_x[i];
+            self.vel_y[i] = self.next_vel_y[i];
+            self.vel_z[i] = self.next_vel_z[i];
+            self.pos_x[i] += self.vel_x[i];
+            self.pos_y[i] += self.vel_y[i];
+            self.pos_z[i] += self.vel_z[i];
         }
     }
 
