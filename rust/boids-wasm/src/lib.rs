@@ -91,12 +91,14 @@ impl FlockSim {
         };
 
         sim.initialize_boids(count);
+        sim.ensure_neighbor_scratch_capacity();
         sim
     }
 
     pub fn set_params(&mut self, params: SimParams) {
         self.cell_size = params.visual_range.max(1.0);
         self.params = params;
+        self.ensure_neighbor_scratch_capacity();
     }
 
     pub fn set_count(&mut self, new_count: usize) {
@@ -131,6 +133,7 @@ impl FlockSim {
         self.next_vel_x.resize(new_count, 0.0);
         self.next_vel_y.resize(new_count, 0.0);
         self.next_vel_z.resize(new_count, 0.0);
+        self.ensure_neighbor_scratch_capacity();
         self.write_positions();
     }
 
@@ -147,6 +150,9 @@ impl FlockSim {
 
         let vis_sq = self.params.visual_range * self.params.visual_range;
         let protected_sq = self.params.protected_range * self.params.protected_range;
+        let avoid_factor = self.params.avoid_factor;
+        let matching_factor = self.params.matching_factor;
+        let centering_factor = self.params.centering_factor;
 
         let boid_count = self.count();
         if self.next_vel_x.len() != boid_count {
@@ -202,9 +208,9 @@ impl FlockSim {
                 }
             }
 
-            let mut vx = self.vel_x[i] + close_x * self.params.avoid_factor;
-            let mut vy = self.vel_y[i] + close_y * self.params.avoid_factor;
-            let mut vz = self.vel_z[i] + close_z * self.params.avoid_factor;
+            let mut vx = self.vel_x[i] + close_x * avoid_factor;
+            let mut vy = self.vel_y[i] + close_y * avoid_factor;
+            let mut vz = self.vel_z[i] + close_z * avoid_factor;
 
             if count > 0.0 {
                 let inv_count = 1.0 / count;
@@ -215,13 +221,13 @@ impl FlockSim {
                 avg_py *= inv_count;
                 avg_pz *= inv_count;
 
-                vx += (avg_vx - vx) * self.params.matching_factor;
-                vy += (avg_vy - vy) * self.params.matching_factor;
-                vz += (avg_vz - vz) * self.params.matching_factor;
+                vx += (avg_vx - vx) * matching_factor;
+                vy += (avg_vy - vy) * matching_factor;
+                vz += (avg_vz - vz) * matching_factor;
 
-                vx += (avg_px - px) * self.params.centering_factor;
-                vy += (avg_py - py) * self.params.centering_factor;
-                vz += (avg_pz - pz) * self.params.centering_factor;
+                vx += (avg_px - px) * centering_factor;
+                vy += (avg_py - py) * centering_factor;
+                vz += (avg_pz - pz) * centering_factor;
             }
 
             self.avoid_boundaries(px, py, pz, &mut vx, &mut vy, &mut vz);
@@ -343,7 +349,7 @@ impl FlockSim {
             for dy in -1..=1 {
                 for dz in -1..=1 {
                     if let Some(cell) = self.cells.get(&(cx + dx, cy + dy, cz + dz)) {
-                        out.extend(cell.iter().copied());
+                        out.extend_from_slice(cell);
                     }
                 }
             }
@@ -403,6 +409,30 @@ impl FlockSim {
             self.pos_x[i] += self.vel_x[i];
             self.pos_y[i] += self.vel_y[i];
             self.pos_z[i] += self.vel_z[i];
+        }
+    }
+
+    fn expected_neighbor_capacity(&self) -> usize {
+        let count = self.count();
+        if count == 0 {
+            return 0;
+        }
+
+        let side = (self.bounds * 2.0).max(1.0);
+        let world_volume = side * side * side;
+        let cell_side = self.cell_size.max(1.0);
+        let cell_volume = cell_side * cell_side * cell_side;
+
+        let density = (count as f32) / world_volume;
+        let expected = (density * cell_volume * 27.0).ceil() as usize;
+        expected.clamp(32, count)
+    }
+
+    fn ensure_neighbor_scratch_capacity(&mut self) {
+        let target = self.expected_neighbor_capacity();
+        if target > self.neighbor_scratch.capacity() {
+            self.neighbor_scratch
+                .reserve(target - self.neighbor_scratch.capacity());
         }
     }
 
