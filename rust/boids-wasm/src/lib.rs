@@ -83,6 +83,8 @@ pub struct FlockSim {
     bounds: f32,
     params: SimParams,
     positions: Vec<f32>,
+    next_velocities: Vec<Vec3>,
+    neighbor_scratch: Vec<usize>,
     cells: HashMap<CellKey, Vec<usize>>,
     cell_size: f32,
 }
@@ -95,6 +97,8 @@ impl FlockSim {
             boids: Vec::with_capacity(count),
             bounds,
             positions: vec![0.0; count * 3],
+            next_velocities: vec![Vec3::default(); count],
+            neighbor_scratch: Vec::new(),
             cell_size: params.visual_range.max(1.0),
             cells: HashMap::new(),
             params,
@@ -120,6 +124,7 @@ impl FlockSim {
         }
 
         self.positions.resize(new_count * 3, 0.0);
+        self.next_velocities.resize(new_count, Vec3::default());
         self.write_positions();
     }
 
@@ -137,17 +142,24 @@ impl FlockSim {
         let vis_sq = self.params.visual_range * self.params.visual_range;
         let protected_sq = self.params.protected_range * self.params.protected_range;
 
-        let mut next_velocities = vec![Vec3::default(); self.boids.len()];
+        if self.next_velocities.len() != self.boids.len() {
+            self.next_velocities
+                .resize(self.boids.len(), Vec3::default());
+        }
 
-        for (i, boid) in self.boids.iter().enumerate() {
-            let neighbors = self.neighbor_indices(boid.position);
+        let mut neighbors = std::mem::take(&mut self.neighbor_scratch);
+
+        for i in 0..self.boids.len() {
+            let boid = self.boids[i];
+            neighbors.clear();
+            self.collect_neighbor_indices(boid.position, &mut neighbors);
 
             let mut close = Vec3::default();
             let mut avg_vel = Vec3::default();
             let mut avg_pos = Vec3::default();
             let mut count = 0.0_f32;
 
-            for n_idx in neighbors {
+            for &n_idx in &neighbors {
                 if n_idx == i {
                     continue;
                 }
@@ -192,11 +204,13 @@ impl FlockSim {
 
             self.avoid_boundaries(boid.position, &mut velocity);
             self.limit_speed(&mut velocity);
-            next_velocities[i] = velocity;
+            self.next_velocities[i] = velocity;
         }
 
+        self.neighbor_scratch = neighbors;
+
         for (idx, boid) in self.boids.iter_mut().enumerate() {
-            boid.velocity = next_velocities[idx];
+            boid.velocity = self.next_velocities[idx];
             boid.position.add_assign(boid.velocity);
         }
 
@@ -280,21 +294,18 @@ impl FlockSim {
         )
     }
 
-    fn neighbor_indices(&self, position: Vec3) -> Vec<usize> {
+    fn collect_neighbor_indices(&self, position: Vec3, out: &mut Vec<usize>) {
         let (cx, cy, cz) = self.cell_key(position);
-        let mut nearby = Vec::new();
 
         for dx in -1..=1 {
             for dy in -1..=1 {
                 for dz in -1..=1 {
                     if let Some(cell) = self.cells.get(&(cx + dx, cy + dy, cz + dz)) {
-                        nearby.extend(cell.iter().copied());
+                        out.extend(cell.iter().copied());
                     }
                 }
             }
         }
-
-        nearby
     }
 
     fn avoid_boundaries(&self, position: Vec3, velocity: &mut Vec3) {
