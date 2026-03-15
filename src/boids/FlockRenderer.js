@@ -7,26 +7,30 @@ export class FlockRenderer {
     this.scene = scene;
     this.flock = flock;
     this.params = params;
-    
+
     this.geometry = null;
     this.material = null;
     this.points = null;
-    
+
     this.initialize();
   }
-  
+
+  getPositionsArray() {
+    if (typeof this.flock.getPositionsView === 'function') {
+      return this.flock.getPositionsView();
+    }
+    return this.flock.getPositions();
+  }
+
   initialize() {
-    // Create buffer geometry
     this.geometry = new THREE.BufferGeometry();
-    
-    // Set initial positions
-    const positions = this.flock.getPositions();
+
+    const positions = this.getPositionsArray();
     this.geometry.setAttribute(
       'position',
       new THREE.BufferAttribute(positions, 3)
     );
-    
-    // Create shader material
+
     this.material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -40,63 +44,50 @@ export class FlockRenderer {
       depthWrite: false,
       blending: THREE.AdditiveBlending
     });
-    
-    // Create points object
+
     this.points = new THREE.Points(this.geometry, this.material);
     this.scene.add(this.points);
   }
-  
-  /**
-   * Update positions and uniforms each frame
-   */
+
   update(time) {
-    // Get new positions from flock
-    const positions = this.flock.getPositions();
-    
-    // Check if buffer needs resizing
+    const positions = this.getPositionsArray();
+
     const positionAttr = this.geometry.getAttribute('position');
-    if (positionAttr.array.length !== positions.length) {
+    const sameLength = positionAttr.array.length === positions.length;
+    const sameBackingStore =
+      positionAttr.array.buffer === positions.buffer &&
+      positionAttr.array.byteOffset === positions.byteOffset;
+
+    if (!sameLength || !sameBackingStore) {
       this.geometry.setAttribute(
         'position',
         new THREE.BufferAttribute(positions, 3)
       );
-    } else {
-      // Update existing buffer
+    } else if (positionAttr.array !== positions) {
       positionAttr.array.set(positions);
       positionAttr.needsUpdate = true;
+    } else {
+      positionAttr.needsUpdate = true;
     }
-    
-    // Update uniforms
+
     this.material.uniforms.time.value = time;
     this.material.uniforms.particleSize.value = this.params.particleSize;
     this.material.uniforms.maxDistance.value = this.params.maxDistance;
   }
-  
-  /**
-   * Handle flock size changes
-   */
+
   resize(newCount) {
-    // Flock will update its own arrays
     this.flock.setCount(newCount);
-    
-    // Force buffer update on next frame
-    const positions = this.flock.getPositions();
+
+    const positions = this.getPositionsArray();
     this.geometry.setAttribute(
       'position',
       new THREE.BufferAttribute(positions, 3)
     );
   }
-  
-  /**
-   * Clean up resources
-   */
+
   dispose() {
     this.geometry.dispose();
     this.material.dispose();
     this.scene.remove(this.points);
   }
 }
-
-
-
-
