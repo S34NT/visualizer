@@ -12,6 +12,8 @@ export class AudioAnalyzer {
     this.analyser = null;
     this.gainNode = null;
     this.mediaStream = null;
+    this.mediaElement = null;
+    this.objectUrl = null;
 
     this.freqData = null;
     this.timeData = null;
@@ -31,6 +33,39 @@ export class AudioAnalyzer {
     this.prevEnergy = 0;
     this.lastBeatTime = 0;
     this.cooldownMs = options.cooldownMs ?? 120;
+  }
+
+
+  async startFromFile(file) {
+    if (!file) {
+      throw new Error('No audio file selected.');
+    }
+
+    await this.ensureAudioContext();
+
+    this.stop();
+
+    this.objectUrl = URL.createObjectURL(file);
+    const audio = document.createElement('audio');
+    audio.src = this.objectUrl;
+    audio.crossOrigin = 'anonymous';
+    audio.loop = true;
+    audio.preload = 'auto';
+
+    this.sourceNode = this.audioContext.createMediaElementSource(audio);
+    this.mediaElement = audio;
+    this.connectGraph();
+
+    try {
+      await audio.play();
+    } catch (error) {
+      this.stop();
+      throw new Error('Audio file could not be played. On iPhone, try selecting the file again after interacting with the page.');
+    }
+
+    this.isInitialized = true;
+    this.isRunning = true;
+    return true;
   }
 
   async startFromYouTube(youtubeUrl) {
@@ -197,6 +232,18 @@ export class AudioAnalyzer {
     if (this.gainNode) {
       this.gainNode.disconnect();
       this.gainNode = null;
+    }
+
+    if (this.mediaElement) {
+      this.mediaElement.pause();
+      this.mediaElement.removeAttribute('src');
+      this.mediaElement.load();
+      this.mediaElement = null;
+    }
+
+    if (this.objectUrl) {
+      URL.revokeObjectURL(this.objectUrl);
+      this.objectUrl = null;
     }
 
     if (this.mediaStream) {
