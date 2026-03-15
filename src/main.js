@@ -35,6 +35,7 @@ class MurmurationSimulator {
       peak: 0
     };
     this.audioLinkButton = null;
+    this.audioFileInput = null;
     this.noAudioFrames = 0;
 
     this.initScene();
@@ -59,39 +60,36 @@ class MurmurationSimulator {
     requestAnimationFrame(this.animate);
   }
 
-  async initAudioAnalyzer() {
-    if (this.audioAnalyzer || this.audioInitializing) return;
+  async initAudioAnalyzer(file) {
+    if (this.audioInitializing) return;
+    if (!file) {
+      this.showStatus('Choose an MP3 or WAV file to start audio reactivity.', true, 2800);
+      return;
+    }
 
     this.audioInitializing = true;
-    this.showStatus('🎵 Link a YouTube video to start audio reactivity...');
+    this.showStatus('🎵 Loading audio file...');
 
     try {
+      if (this.audioAnalyzer) {
+        await this.audioAnalyzer.dispose();
+      }
+
       this.audioAnalyzer = new AudioAnalyzer({ monitorGain: 1.0 });
-      const youtubeUrl = window.prompt('Paste a YouTube URL for audio reactivity:');
-      if (!youtubeUrl) {
-        throw new Error('No YouTube URL provided.');
-      }
+      await this.audioAnalyzer.startFromFile(file);
 
-      if (typeof this.audioAnalyzer.startFromYouTube === 'function') {
-        await this.audioAnalyzer.startFromYouTube(youtubeUrl);
-      } else if (typeof this.audioAnalyzer.startFromMic === 'function') {
-        await this.audioAnalyzer.startFromMic(youtubeUrl);
-      } else {
-        throw new Error('AudioAnalyzer has no supported start method.');
-      }
-
-      this.showStatus('🎵 Audio visualizer active from shared YouTube tab.', false, 3500);
+      this.showStatus(`🎵 Audio visualizer active: ${file.name}`, false, 3500);
       this.noAudioFrames = 0;
       if (this.audioLinkButton) {
-        this.audioLinkButton.textContent = '🎵 YouTube Audio Linked';
+        this.audioLinkButton.textContent = '🎵 Audio File Loaded';
       }
     } catch (error) {
       console.error('Failed to initialize audio analyzer:', error);
-      this.showStatus(`Audio link failed: ${error.message}`, true);
+      this.showStatus(`Audio load failed: ${error.message}`, true);
       this.audioAnalyzer = null;
       this.noAudioFrames = 0;
       if (this.audioLinkButton) {
-        this.audioLinkButton.textContent = '🎵 Link YouTube Audio';
+        this.audioLinkButton.textContent = '🎵 Load MP3/WAV';
       }
     }
 
@@ -113,7 +111,7 @@ class MurmurationSimulator {
     if (loudness < 0.01) {
       this.noAudioFrames++;
       if (this.noAudioFrames === 180) {
-        this.showStatus('No tab audio detected yet. Make sure YouTube is playing and tab audio sharing is enabled.', true, 4000);
+        this.showStatus('No audio signal detected yet. Try a different file or increase playback volume.', true, 4000);
       }
     } else {
       this.noAudioFrames = 0;
@@ -133,7 +131,7 @@ class MurmurationSimulator {
     const button = document.createElement('button');
     button.id = 'audio-link-button';
     button.type = 'button';
-    button.textContent = '🎵 Link YouTube Audio';
+    button.textContent = '🎵 Load MP3/WAV';
     button.style.cssText = `
       position: fixed;
       bottom: 20px;
@@ -152,11 +150,24 @@ class MurmurationSimulator {
       box-shadow: 0 4px 20px rgba(0,0,0,0.35);
     `;
 
-    button.addEventListener('click', () => {
-      this.initAudioAnalyzer();
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.mp3,.wav,audio/mpeg,audio/wav';
+    fileInput.style.display = 'none';
+
+    fileInput.addEventListener('change', async (event) => {
+      const [file] = event.target.files || [];
+      await this.initAudioAnalyzer(file);
+      event.target.value = '';
     });
 
+    button.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    document.body.appendChild(fileInput);
     document.body.appendChild(button);
+    this.audioFileInput = fileInput;
     this.audioLinkButton = button;
   }
 
@@ -312,7 +323,7 @@ class MurmurationSimulator {
           this.gui.toggle();
           break;
         case 'KeyM':
-          this.initAudioAnalyzer();
+          this.audioFileInput?.click();
           break;
         case 'KeyB':
           this.toggleBenchmark();
@@ -398,6 +409,11 @@ class MurmurationSimulator {
     if (this.audioLinkButton) {
       this.audioLinkButton.remove();
       this.audioLinkButton = null;
+    }
+
+    if (this.audioFileInput) {
+      this.audioFileInput.remove();
+      this.audioFileInput = null;
     }
 
     this.noAudioFrames = 0;

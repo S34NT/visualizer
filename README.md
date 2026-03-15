@@ -38,17 +38,12 @@ npm run build
 - **F**: Toggle fullscreen
 - **S**: Take screenshot
 - **H**: Hide/show GUI
-- **M**: Link a YouTube video and start tab-audio reactivity
+- **M**: Open file picker to load an MP3/WAV for audio reactivity
 - **B**: Toggle benchmark logging (prints frame/simulation timing in console)
 
 ### Touch / Mobile
-- **🎵 Link YouTube Audio button** (bottom-left): Opens URL prompt and starts YouTube tab-audio linking flow
-- **Important**: On mobile browsers, tap the button first (user gesture required), then choose the YouTube tab and enable shared/tab audio if prompted
-
-- If video links successfully but you hear silence and see no reaction:
-  1. Confirm the YouTube video is actively playing (not paused).
-  2. In the share picker, choose the **browser tab** and enable **Share tab audio**.
-  3. Use **Chrome on Android** when possible; many iOS browsers do not fully support tab-audio capture APIs.
+- **🎵 Load MP3/WAV button** (bottom-left): Opens file picker and loads local audio for reactivity
+- **Tip**: MP3 and WAV are supported. If playback is silent, try selecting the file again after tapping the page first (mobile autoplay policies).
 
 ## Parameters
 
