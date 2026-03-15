@@ -17,9 +17,13 @@ class MurmurationSimulator {
       turnFactor: defaults.turnFactor,
       particleSize: defaults.particleSize,
       maxDistance: defaults.maxDistance,
-      centeringFactor: defaults.centeringFactor
+      centeringFactor: defaults.centeringFactor,
+      visualRange: defaults.visualRange,
+      protectedRange: defaults.protectedRange
     };
     this.beatEnvelope = 0;
+    this.evolutionPhase = 0;
+    this.evolutionPhaseSecondary = 0;
 
     this.isPaused = false;
     this.time = 0;
@@ -141,7 +145,17 @@ class MurmurationSimulator {
     const targetMaxDistance = this.baseAudioParams.maxDistance + trebleEnergy * 170 + bassEnergy * 40;
     const targetCentering = this.baseAudioParams.centeringFactor + bassEnergy * 0.00035 + loudness * 0.00015;
 
+    this.evolutionPhase += 0.0025 + loudness * 0.002;
+    this.evolutionPhaseSecondary += 0.0012 + midEnergy * 0.0012;
+    const topologyDrift =
+      Math.sin(this.evolutionPhase) * 0.65 +
+      Math.sin(this.evolutionPhaseSecondary + Math.PI * 0.25) * 0.35;
+
+    const targetVisualRange = this.baseAudioParams.visualRange + topologyDrift * 7.5 + bassEnergy * 2.5;
+    const targetProtectedRange = this.baseAudioParams.protectedRange + topologyDrift * 2.4 + trebleEnergy * 0.5;
+
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
     this.params.maxSpeed = lerp(this.params.maxSpeed, targetMaxSpeed, 0.16);
     this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
@@ -150,6 +164,8 @@ class MurmurationSimulator {
     this.params.particleSize = lerp(this.params.particleSize, targetParticleSize, 0.18);
     this.params.maxDistance = lerp(this.params.maxDistance, targetMaxDistance, 0.1);
     this.params.centeringFactor = lerp(this.params.centeringFactor, targetCentering, 0.08);
+    this.params.visualRange = clamp(lerp(this.params.visualRange, targetVisualRange, 0.05), 10, 100);
+    this.params.protectedRange = clamp(lerp(this.params.protectedRange, targetProtectedRange, 0.05), 2, 30);
   }
 
   initAudioLinkButton() {
