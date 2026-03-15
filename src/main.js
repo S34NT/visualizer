@@ -47,6 +47,7 @@ class MurmurationSimulator {
     this.audioLinkButton = null;
     this.audioFileInput = null;
     this.noAudioFrames = 0;
+    this.lastGuiRefreshAt = 0;
 
     this.initScene();
   }
@@ -329,6 +330,16 @@ class MurmurationSimulator {
     this.benchmark.lastReportAt = performance.now();
   }
 
+  maybeRefreshGuiDisplay() {
+    if (!this.gui?.refreshDisplay) return;
+
+    const now = performance.now();
+    if (now - this.lastGuiRefreshAt < 160) return;
+
+    this.gui.refreshDisplay();
+    this.lastGuiRefreshAt = now;
+  }
+
   initKeyboard() {
     window.addEventListener('keydown', (e) => {
       switch (e.code) {
@@ -406,6 +417,7 @@ class MurmurationSimulator {
 
     if (!this.isPaused) {
       this.applyAudioReactiveModulation();
+      this.maybeRefreshGuiDisplay();
       const simStart = performance.now();
       this.flock.update(this.params);
       this.flockRenderer.update(this.time);
