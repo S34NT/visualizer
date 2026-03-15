@@ -10,6 +10,16 @@ import { defaults } from './config/defaults.js';
 class MurmurationSimulator {
   constructor() {
     this.params = { ...defaults };
+    this.baseAudioParams = {
+      maxSpeed: defaults.maxSpeed,
+      matchingFactor: defaults.matchingFactor,
+      avoidFactor: defaults.avoidFactor,
+      turnFactor: defaults.turnFactor,
+      particleSize: defaults.particleSize,
+      maxDistance: defaults.maxDistance,
+      centeringFactor: defaults.centeringFactor
+    };
+    this.beatEnvelope = 0;
 
     this.isPaused = false;
     this.time = 0;
@@ -100,13 +110,16 @@ class MurmurationSimulator {
     if (!this.audioAnalyzer || !this.audioAnalyzer.isRunning) return;
 
     this.audioFeatures = this.audioAnalyzer.getFeatures();
-    const { rms, bass, mid, treble, beat } = this.audioFeatures;
+    const { rms, bass, mid, treble, beat, peak } = this.audioFeatures;
 
-    const sensitivity = 2.2;
-    const bassEnergy = Math.min(1, bass * sensitivity);
-    const midEnergy = Math.min(1, mid * sensitivity);
-    const trebleEnergy = Math.min(1, treble * sensitivity);
-    const loudness = Math.min(1, rms * sensitivity * 1.5);
+    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+    const shaped = (v, gamma = 1.0) => Math.pow(clamp01(v), gamma);
+
+    const loudness = shaped(rms * 2.1, 0.85);
+    const bassEnergy = shaped(bass * 2.0, 1.1);
+    const midEnergy = shaped(mid * 2.0, 1.0);
+    const trebleEnergy = shaped(treble * 2.2, 1.15);
+    const transient = shaped(peak * 1.8, 1.0);
 
     if (loudness < 0.01) {
       this.noAudioFrames++;
@@ -117,12 +130,25 @@ class MurmurationSimulator {
       this.noAudioFrames = 0;
     }
 
-    this.params.maxSpeed = 5.5 + bassEnergy * 6.5;
-    this.params.matchingFactor = 0.02 + midEnergy * 0.16;
-    this.params.avoidFactor = 0.02 + trebleEnergy * 0.16;
-    this.params.turnFactor = 0.1 + beat * 0.35;
-    this.params.particleSize = 2.0 + loudness * 5.0;
-    this.params.maxDistance = 150 + trebleEnergy * 260;
+    this.beatEnvelope = Math.max(beat, this.beatEnvelope * 0.88);
+
+    const targetMaxSpeed = this.baseAudioParams.maxSpeed + bassEnergy * 3.2 + loudness * 1.6;
+    const targetMatching = this.baseAudioParams.matchingFactor + midEnergy * 0.11 + loudness * 0.03;
+    const targetAvoid = this.baseAudioParams.avoidFactor + trebleEnergy * 0.09 + transient * 0.04;
+    const targetTurn = this.baseAudioParams.turnFactor + this.beatEnvelope * 0.23 + transient * 0.1;
+    const targetParticleSize = this.baseAudioParams.particleSize + loudness * 2.8 + transient * 1.2;
+    const targetMaxDistance = this.baseAudioParams.maxDistance + trebleEnergy * 170 + bassEnergy * 40;
+    const targetCentering = this.baseAudioParams.centeringFactor + bassEnergy * 0.00035 + loudness * 0.00015;
+
+    const lerp = (current, target, alpha) => current + (target - current) * alpha;
+
+    this.params.maxSpeed = lerp(this.params.maxSpeed, targetMaxSpeed, 0.16);
+    this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
+    this.params.avoidFactor = lerp(this.params.avoidFactor, targetAvoid, 0.12);
+    this.params.turnFactor = lerp(this.params.turnFactor, targetTurn, 0.25);
+    this.params.particleSize = lerp(this.params.particleSize, targetParticleSize, 0.18);
+    this.params.maxDistance = lerp(this.params.maxDistance, targetMaxDistance, 0.1);
+    this.params.centeringFactor = lerp(this.params.centeringFactor, targetCentering, 0.08);
   }
 
   initAudioLinkButton() {
