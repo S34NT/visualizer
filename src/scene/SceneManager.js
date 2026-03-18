@@ -26,7 +26,7 @@ export class SceneManager {
   initCamera() {
     const aspect = this.width / this.height;
     this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 2000);
-    this.camera.position.set(0, 0, 300);
+    this.camera.position.set(0, 0, 620);
     this.camera.lookAt(0, 0, 0);
   }
   
@@ -49,6 +49,8 @@ export class SceneManager {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.rotateSpeed = 0.8;
+    this.controls.autoRotate = true;
+    this.controls.autoRotateSpeed = 0.28;
     this.controls.zoomSpeed = 1.2;
     this.controls.panSpeed = 0.8;
     this.controls.minDistance = 50;
@@ -102,7 +104,7 @@ export class SceneManager {
   }
   
   resetCamera() {
-    this.camera.position.set(0, 0, 300);
+    this.camera.position.set(0, 0, 620);
     this.camera.lookAt(0, 0, 0);
     this.controls.reset();
   }
