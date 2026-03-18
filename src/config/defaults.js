@@ -1,25 +1,25 @@
 // Default simulation parameters based on biological research
 export const defaults = {
   // Flocking behavior
-  visualRange: 40,
-  protectedRange: 8,
-  centeringFactor: 0.0005,
-  avoidFactor: 0.05,
-  matchingFactor: 0.05,
+  visualRange: 10,
+  protectedRange: 30,
+  centeringFactor: 0.00001,
+  avoidFactor: 0.1,
+  matchingFactor: 0.1,
 
   // Movement constraints
-  maxSpeed: 6,
-  minSpeed: 3,
-  turnFactor: 0.2,
-  margin: 50,
+  maxSpeed: 2,
+  minSpeed: 1,
+  turnFactor: 0.5,
+  margin: 100,
 
   // Simulation size
   birdCount: 1000,
   bounds: 150,
 
   // Visualization
-  particleSize: 3.0,
-  maxDistance: 200,
+  particleSize: 5,
+  maxDistance: 250,
 
   // Performance
   targetFPS: 60,
