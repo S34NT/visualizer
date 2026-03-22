@@ -152,7 +152,8 @@ class MurmurationSimulator {
 
       this.marginClockStarted = true;
       this.marginClockStartTime = playbackTime;
-      this.lastMarginMeasureIndex = -1;
+      this.lastMarginMeasureIndex = 0;
+      return;
     }
 
     const elapsed = Math.max(0, playbackTime - this.marginClockStartTime);
