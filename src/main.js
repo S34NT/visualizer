@@ -141,10 +141,10 @@ class MurmurationSimulator {
 
     this.beatEnvelope = Math.max(beat, this.beatEnvelope * 0.88);
 
-    const targetMaxSpeed = this.baseAudioParams.maxSpeed + bassEnergy * 3.2 + loudness * 1.6;
+    const targetMaxSpeed = this.baseAudioParams.maxSpeed;
     const targetMatching = this.baseAudioParams.matchingFactor + midEnergy * 0.11 + loudness * 0.03;
     const targetAvoid = this.baseAudioParams.avoidFactor + trebleEnergy * 0.09 + transient * 0.04;
-    const targetTurn = this.baseAudioParams.turnFactor + this.beatEnvelope * 0.23 + transient * 0.1;
+    const targetTurn = this.baseAudioParams.turnFactor - (this.beatEnvelope * 0.23 + transient * 0.1);
     const targetParticleSize = this.baseAudioParams.particleSize + loudness * 2.8 + transient * 1.2;
     const targetMaxDistance = this.baseAudioParams.maxDistance + trebleEnergy * 170 + bassEnergy * 40;
     const targetCentering = this.baseAudioParams.centeringFactor + bassEnergy * 0.00035 + loudness * 0.00015;
@@ -169,18 +169,17 @@ class MurmurationSimulator {
       this.lastMarginModulationAt = now;
     }
 
-    this.params.maxSpeed = lerp(this.params.maxSpeed, targetMaxSpeed, 0.16);
+    this.params.maxSpeed = targetMaxSpeed;
     this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
     this.params.avoidFactor = lerp(this.params.avoidFactor, targetAvoid, 0.12);
-    this.params.turnFactor = lerp(this.params.turnFactor, targetTurn, 0.25);
+    this.params.turnFactor = clamp(lerp(this.params.turnFactor, targetTurn, 0.25), 0, 0.5);
     this.params.particleSize = lerp(this.params.particleSize, targetParticleSize, 0.18);
     this.params.maxDistance = lerp(this.params.maxDistance, targetMaxDistance, 0.1);
     this.params.centeringFactor = lerp(this.params.centeringFactor, targetCentering, 0.08);
-    this.params.minSpeed = clamp(lerp(this.params.minSpeed, targetMinSpeed, 0.09), 1, 10);
+    this.params.minSpeed = clamp(lerp(this.params.minSpeed, targetMinSpeed, 0.09), 1, this.baseAudioParams.maxSpeed - 0.4);
     this.params.margin = clamp(lerp(this.params.margin, this.marginTarget, 0.06), 20, 100);
     this.params.visualRange = clamp(lerp(this.params.visualRange, targetVisualRange, 0.05), 10, 100);
     this.params.protectedRange = clamp(lerp(this.params.protectedRange, targetProtectedRange, 0.05), 2, 30);
-    this.params.maxSpeed = Math.max(this.params.maxSpeed, this.params.minSpeed + 0.4);
   }
 
   initAudioLinkButton() {
