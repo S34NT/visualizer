@@ -29,6 +29,8 @@ class MurmurationSimulator {
     this.marginTarget = defaults.margin;
     this.lastMarginMeasureIndex = -1;
     this.lastMarginPlaybackTime = 0;
+    this.marginClockStarted = false;
+    this.marginClockStartTime = 0;
 
     this.isPaused = false;
     this.time = 0;
@@ -136,14 +138,25 @@ class MurmurationSimulator {
     return marginSteps[nextIndex];
   }
 
-  maybeStepMarginOnMeasure(playbackTime) {
+  maybeStepMarginOnMeasure(playbackTime, bassLevel) {
     if (playbackTime < this.lastMarginPlaybackTime) {
       this.lastMarginMeasureIndex = -1;
+      this.marginClockStarted = false;
+      this.marginClockStartTime = 0;
     }
 
     this.lastMarginPlaybackTime = playbackTime;
 
-    const currentMeasureIndex = Math.floor(playbackTime / 4);
+    if (!this.marginClockStarted) {
+      if (bassLevel < 0.12) return;
+
+      this.marginClockStarted = true;
+      this.marginClockStartTime = playbackTime;
+      this.lastMarginMeasureIndex = -1;
+    }
+
+    const elapsed = Math.max(0, playbackTime - this.marginClockStartTime);
+    const currentMeasureIndex = Math.floor(elapsed / 4);
     if (currentMeasureIndex <= this.lastMarginMeasureIndex) return;
 
     for (let measureIndex = this.lastMarginMeasureIndex + 1; measureIndex <= currentMeasureIndex; measureIndex++) {
@@ -207,7 +220,7 @@ class MurmurationSimulator {
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-    this.maybeStepMarginOnMeasure(this.audioAnalyzer.getPlaybackTime());
+    this.maybeStepMarginOnMeasure(this.audioAnalyzer.getPlaybackTime(), bassEnergy);
 
     this.params.maxSpeed = targetMaxSpeed;
     this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
@@ -529,6 +542,8 @@ class MurmurationSimulator {
     this.intensity = 0;
     this.lastMarginMeasureIndex = -1;
     this.lastMarginPlaybackTime = 0;
+    this.marginClockStarted = false;
+    this.marginClockStartTime = 0;
     this.marginTarget = this.baseAudioParams.margin;
     this.sceneManager?.setAutoRotateSpeed?.(0.4);
   }
