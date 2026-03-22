@@ -151,6 +151,14 @@ export class AudioAnalyzer {
     this.timeData = new Uint8Array(this.analyser.fftSize);
   }
 
+  getPlaybackTime() {
+    if (this.mediaElement) {
+      return this.mediaElement.currentTime || 0;
+    }
+
+    return 0;
+  }
+
   getFeatures() {
     if (!this.isRunning || !this.analyser) {
       return this.features;

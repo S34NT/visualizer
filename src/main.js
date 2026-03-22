@@ -27,8 +27,8 @@ class MurmurationSimulator {
     this.evolutionPhase = 0;
     this.evolutionPhaseSecondary = 0;
     this.marginTarget = defaults.margin;
-    this.measureBeatCount = 0;
-    this.lastProcessedBeatCount = 0;
+    this.lastMarginMeasureIndex = -1;
+    this.lastMarginPlaybackTime = 0;
 
     this.isPaused = false;
     this.time = 0;
@@ -136,29 +136,33 @@ class MurmurationSimulator {
     return marginSteps[nextIndex];
   }
 
-  maybeStepMarginOnMeasure(beatCount) {
-    if (beatCount <= this.lastProcessedBeatCount) return;
+  maybeStepMarginOnMeasure(playbackTime) {
+    if (playbackTime < this.lastMarginPlaybackTime) {
+      this.lastMarginMeasureIndex = -1;
+    }
 
-    const newBeats = beatCount - this.lastProcessedBeatCount;
-    this.lastProcessedBeatCount = beatCount;
+    this.lastMarginPlaybackTime = playbackTime;
 
-    for (let i = 0; i < newBeats; i++) {
+    const currentMeasureIndex = Math.floor(playbackTime / 4);
+    if (currentMeasureIndex <= this.lastMarginMeasureIndex) return;
+
+    for (let measureIndex = this.lastMarginMeasureIndex + 1; measureIndex <= currentMeasureIndex; measureIndex++) {
       this.marginTarget = this.normalizeMarginStep(this.marginTarget);
-      this.measureBeatCount = (this.measureBeatCount + 1) % 4;
-      if (this.measureBeatCount !== 0) continue;
 
       if (Math.random() >= (1 / 3)) continue;
 
       const direction = Math.random() < 0.5 ? -1 : 1;
       this.marginTarget = this.nextMarginStep(this.marginTarget, direction);
     }
+
+    this.lastMarginMeasureIndex = currentMeasureIndex;
   }
 
   applyAudioReactiveModulation() {
     if (!this.audioAnalyzer || !this.audioAnalyzer.isRunning) return;
 
     this.audioFeatures = this.audioAnalyzer.getFeatures();
-    const { rms, bass, mid, treble, beat, beatCount, peak } = this.audioFeatures;
+    const { rms, bass, mid, treble, beat, peak } = this.audioFeatures;
 
     const clamp01 = (v) => Math.min(1, Math.max(0, v));
     const shaped = (v, gamma = 1.0) => Math.pow(clamp01(v), gamma);
@@ -203,7 +207,7 @@ class MurmurationSimulator {
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-    this.maybeStepMarginOnMeasure(beatCount);
+    this.maybeStepMarginOnMeasure(this.audioAnalyzer.getPlaybackTime());
 
     this.params.maxSpeed = targetMaxSpeed;
     this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
@@ -523,8 +527,8 @@ class MurmurationSimulator {
 
     this.noAudioFrames = 0;
     this.intensity = 0;
-    this.measureBeatCount = 0;
-    this.lastProcessedBeatCount = 0;
+    this.lastMarginMeasureIndex = -1;
+    this.lastMarginPlaybackTime = 0;
     this.marginTarget = this.baseAudioParams.margin;
     this.sceneManager?.setAutoRotateSpeed?.(0.4);
   }
