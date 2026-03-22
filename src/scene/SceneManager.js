@@ -53,7 +53,8 @@ export class SceneManager {
     this.controls.dampingFactor = 0.05;
     this.controls.rotateSpeed = 0.8;
     this.controls.autoRotate = true;
-    this.controls.autoRotateSpeed = 0.4;
+    this.baseAutoRotateSpeed = 0.4;
+    this.controls.autoRotateSpeed = this.baseAutoRotateSpeed;
     this.controls.zoomSpeed = 1.2;
     this.controls.panSpeed = 0.8;
     this.controls.minDistance = 50;
@@ -96,6 +97,10 @@ export class SceneManager {
     this.scene.remove(object);
   }
   
+  setAutoRotateSpeed(speed) {
+    this.controls.autoRotateSpeed = Math.max(0.05, speed);
+  }
+
   update() {
     this.controls.update();
   }
