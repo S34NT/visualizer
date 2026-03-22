@@ -142,7 +142,7 @@ class MurmurationSimulator {
         continue;
       }
 
-      this.marginTarget = Math.min(100, Math.max(20, this.marginTarget + direction));
+      this.marginTarget = Math.round(Math.min(100, Math.max(20, this.marginTarget + direction)));
     }
   }
 
@@ -205,7 +205,7 @@ class MurmurationSimulator {
     this.params.maxDistance = lerp(this.params.maxDistance, targetMaxDistance, 0.1);
     this.params.centeringFactor = lerp(this.params.centeringFactor, targetCentering, 0.08);
     this.params.minSpeed = clamp(lerp(this.params.minSpeed, targetMinSpeed, 0.18), 1, this.baseAudioParams.maxSpeed - 0.1);
-    this.params.margin = clamp(lerp(this.params.margin, this.marginTarget, 0.06), 20, 100);
+    this.params.margin = Math.round(clamp(this.marginTarget, 20, 100));
     this.params.visualRange = clamp(lerp(this.params.visualRange, targetVisualRange, 0.05), 10, 100);
     this.params.protectedRange = clamp(lerp(this.params.protectedRange, targetProtectedRange, 0.05), 2, 30);
   }
