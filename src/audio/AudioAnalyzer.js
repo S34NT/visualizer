@@ -27,6 +27,7 @@ export class AudioAnalyzer {
       mid: 0,
       treble: 0,
       beat: 0,
+      beatCount: 0,
       peak: 0
     };
 
@@ -181,6 +182,7 @@ export class AudioAnalyzer {
     const beatDetected = delta > 0.1 && rms > 0.06 && (now - this.lastBeatTime) > this.cooldownMs;
     if (beatDetected) {
       this.lastBeatTime = now;
+      this.features.beatCount += 1;
     }
 
     this.prevEnergy = this.lerp(this.prevEnergy, energy, 0.4);
@@ -250,6 +252,11 @@ export class AudioAnalyzer {
       this.mediaStream.getTracks().forEach(track => track.stop());
       this.mediaStream = null;
     }
+
+    this.features.beat = 0;
+    this.features.beatCount = 0;
+    this.prevEnergy = 0;
+    this.lastBeatTime = 0;
   }
 
   async dispose() {

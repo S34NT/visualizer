@@ -28,7 +28,7 @@ class MurmurationSimulator {
     this.evolutionPhaseSecondary = 0;
     this.marginTarget = defaults.margin;
     this.measureBeatCount = 0;
-    this.lastBeatLevel = 0;
+    this.lastProcessedBeatCount = 0;
 
     this.isPaused = false;
     this.time = 0;
@@ -51,6 +51,7 @@ class MurmurationSimulator {
       mid: 0,
       treble: 0,
       beat: 0,
+      beatCount: 0,
       peak: 0
     };
     this.audioLinkButton = null;
@@ -117,38 +118,39 @@ class MurmurationSimulator {
     this.audioInitializing = false;
   }
 
-  maybeStepMarginOnMeasure(beatLevel) {
-    const beatThreshold = 0.55;
-    const isBeatTrigger = beatLevel >= beatThreshold && this.lastBeatLevel < beatThreshold;
-    this.lastBeatLevel = beatLevel;
+  maybeStepMarginOnMeasure(beatCount) {
+    if (beatCount <= this.lastProcessedBeatCount) return;
 
-    if (!isBeatTrigger) return;
+    const newBeats = beatCount - this.lastProcessedBeatCount;
+    this.lastProcessedBeatCount = beatCount;
 
-    this.measureBeatCount = (this.measureBeatCount + 1) % 4;
-    if (this.measureBeatCount !== 0) return;
+    for (let i = 0; i < newBeats; i++) {
+      this.measureBeatCount = (this.measureBeatCount + 1) % 4;
+      if (this.measureBeatCount !== 0) continue;
 
-    if (Math.random() >= (1 / 3)) return;
+      if (Math.random() >= (1 / 3)) continue;
 
-    const direction = Math.random() < 0.5 ? -20 : 20;
+      const direction = Math.random() < 0.5 ? -20 : 20;
 
-    if (this.marginTarget <= 20 && direction < 0) {
-      this.marginTarget = 60;
-      return;
+      if (this.marginTarget <= 20 && direction < 0) {
+        this.marginTarget = 60;
+        continue;
+      }
+
+      if (this.marginTarget >= 100 && direction > 0) {
+        this.marginTarget = 40;
+        continue;
+      }
+
+      this.marginTarget = Math.min(100, Math.max(20, this.marginTarget + direction));
     }
-
-    if (this.marginTarget >= 100 && direction > 0) {
-      this.marginTarget = 40;
-      return;
-    }
-
-    this.marginTarget = Math.min(100, Math.max(20, this.marginTarget + direction));
   }
 
   applyAudioReactiveModulation() {
     if (!this.audioAnalyzer || !this.audioAnalyzer.isRunning) return;
 
     this.audioFeatures = this.audioAnalyzer.getFeatures();
-    const { rms, bass, mid, treble, beat, peak } = this.audioFeatures;
+    const { rms, bass, mid, treble, beat, beatCount, peak } = this.audioFeatures;
 
     const clamp01 = (v) => Math.min(1, Math.max(0, v));
     const shaped = (v, gamma = 1.0) => Math.pow(clamp01(v), gamma);
@@ -193,7 +195,7 @@ class MurmurationSimulator {
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-    this.maybeStepMarginOnMeasure(beat);
+    this.maybeStepMarginOnMeasure(beatCount);
 
     this.params.maxSpeed = targetMaxSpeed;
     this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
@@ -514,7 +516,7 @@ class MurmurationSimulator {
     this.noAudioFrames = 0;
     this.intensity = 0;
     this.measureBeatCount = 0;
-    this.lastBeatLevel = 0;
+    this.lastProcessedBeatCount = 0;
     this.marginTarget = this.baseAudioParams.margin;
     this.sceneManager?.setAutoRotateSpeed?.(0.4);
   }
