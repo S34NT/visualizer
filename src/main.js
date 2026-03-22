@@ -118,6 +118,11 @@ class MurmurationSimulator {
     this.audioInitializing = false;
   }
 
+  normalizeMarginStep(value) {
+    const clamped = Math.min(100, Math.max(20, value));
+    return 20 + Math.round((clamped - 20) / 20) * 20;
+  }
+
   maybeStepMarginOnMeasure(beatCount) {
     if (beatCount <= this.lastProcessedBeatCount) return;
 
@@ -125,6 +130,7 @@ class MurmurationSimulator {
     this.lastProcessedBeatCount = beatCount;
 
     for (let i = 0; i < newBeats; i++) {
+      this.marginTarget = this.normalizeMarginStep(this.marginTarget);
       this.measureBeatCount = (this.measureBeatCount + 1) % 4;
       if (this.measureBeatCount !== 0) continue;
 
@@ -133,16 +139,16 @@ class MurmurationSimulator {
       const direction = Math.random() < 0.5 ? -20 : 20;
 
       if (this.marginTarget <= 20 && direction < 0) {
-        this.marginTarget = 60;
+        this.marginTarget = this.normalizeMarginStep(60);
         continue;
       }
 
       if (this.marginTarget >= 100 && direction > 0) {
-        this.marginTarget = 40;
+        this.marginTarget = this.normalizeMarginStep(40);
         continue;
       }
 
-      this.marginTarget = Math.round(Math.min(100, Math.max(20, this.marginTarget + direction)));
+      this.marginTarget = this.normalizeMarginStep(this.marginTarget + direction);
     }
   }
 
@@ -205,7 +211,7 @@ class MurmurationSimulator {
     this.params.maxDistance = lerp(this.params.maxDistance, targetMaxDistance, 0.1);
     this.params.centeringFactor = lerp(this.params.centeringFactor, targetCentering, 0.08);
     this.params.minSpeed = clamp(lerp(this.params.minSpeed, targetMinSpeed, 0.18), 1, this.baseAudioParams.maxSpeed - 0.1);
-    this.params.margin = Math.round(clamp(this.marginTarget, 20, 100));
+    this.params.margin = this.normalizeMarginStep(this.marginTarget);
     this.params.visualRange = clamp(lerp(this.params.visualRange, targetVisualRange, 0.05), 10, 100);
     this.params.protectedRange = clamp(lerp(this.params.protectedRange, targetProtectedRange, 0.05), 2, 30);
   }
