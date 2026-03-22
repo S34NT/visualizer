@@ -123,6 +123,19 @@ class MurmurationSimulator {
     return 20 + Math.round((clamped - 20) / 20) * 20;
   }
 
+  nextMarginStep(currentMargin, direction) {
+    const current = this.normalizeMarginStep(currentMargin);
+
+    if (current === 20 && direction < 0) return 60;
+    if (current === 100 && direction > 0) return 40;
+
+    const marginSteps = [20, 40, 60, 80, 100];
+    const currentIndex = marginSteps.indexOf(current);
+    const nextIndex = Math.min(4, Math.max(0, currentIndex + (direction > 0 ? 1 : -1)));
+
+    return marginSteps[nextIndex];
+  }
+
   maybeStepMarginOnMeasure(beatCount) {
     if (beatCount <= this.lastProcessedBeatCount) return;
 
@@ -136,19 +149,8 @@ class MurmurationSimulator {
 
       if (Math.random() >= (1 / 3)) continue;
 
-      const direction = Math.random() < 0.5 ? -20 : 20;
-
-      if (this.marginTarget <= 20 && direction < 0) {
-        this.marginTarget = this.normalizeMarginStep(60);
-        continue;
-      }
-
-      if (this.marginTarget >= 100 && direction > 0) {
-        this.marginTarget = this.normalizeMarginStep(40);
-        continue;
-      }
-
-      this.marginTarget = this.normalizeMarginStep(this.marginTarget + direction);
+      const direction = Math.random() < 0.5 ? -1 : 1;
+      this.marginTarget = this.nextMarginStep(this.marginTarget, direction);
     }
   }
 
