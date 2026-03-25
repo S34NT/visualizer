@@ -102,6 +102,11 @@ class MurmurationSimulator {
       this.audioAnalyzer = new AudioAnalyzer({ monitorGain: 1.0 });
       await this.audioAnalyzer.startFromFile(file);
 
+      this.baseAudioParams.minSpeed = 5;
+      this.baseAudioParams.protectedRange = 10;
+      this.params.minSpeed = 5;
+      this.params.protectedRange = 10;
+
       this.showStatus(`🎵 Audio visualizer active: ${file.name}`, false, 3500);
       this.noAudioFrames = 0;
       if (this.audioLinkButton) {
