@@ -235,7 +235,8 @@ class MurmurationSimulator {
     this.params.particleSize = lerp(this.params.particleSize, targetParticleSize, 0.18);
     this.params.maxDistance = lerp(this.params.maxDistance, targetMaxDistance, 0.1);
     this.params.centeringFactor = lerp(this.params.centeringFactor, targetCentering, 0.08);
-    this.params.minSpeed = clamp(lerp(this.params.minSpeed, targetMinSpeed, 0.18), 1, this.baseAudioParams.maxSpeed - 0.1);
+    this.params.minSpeed = clamp(lerp(this.params.minSpeed, targetMinSpeed, 0.18), 1, 10);
+    this.params.maxSpeed = Math.max(targetMaxSpeed, this.params.minSpeed + 0.1);
     this.params.margin = this.normalizeMarginStep(this.marginTarget);
     this.params.visualRange = clamp(lerp(this.params.visualRange, targetVisualRange, 0.05), 10, 100);
     this.params.protectedRange = clamp(lerp(this.params.protectedRange, targetProtectedRange, 0.05), 2, 30);
