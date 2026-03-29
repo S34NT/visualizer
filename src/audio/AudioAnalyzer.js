@@ -35,6 +35,7 @@ export class AudioAnalyzer {
     this.lastBeatTime = 0;
     this.cooldownMs = options.cooldownMs ?? 120;
     this.preprocessedTimeline = null;
+    this.preprocessMeta = { status: 'idle', reason: null, beats: 0, sections: 0 };
   }
 
 
@@ -48,10 +49,28 @@ export class AudioAnalyzer {
     this.stop();
 
     this.objectUrl = URL.createObjectURL(file);
+    this.preprocessMeta = { status: 'processing', reason: null, beats: 0, sections: 0 };
     this.preprocessedTimeline = await this.buildPreprocessedTimeline(file).catch((error) => {
+      this.preprocessMeta = {
+        status: 'disabled',
+        reason: error?.message || String(error),
+        beats: 0,
+        sections: 0
+      };
       console.warn('Audio preprocessing disabled for this file:', error);
       return null;
     });
+    if (this.preprocessedTimeline) {
+      this.preprocessMeta = {
+        status: 'ready',
+        reason: null,
+        beats: this.preprocessedTimeline.beats.length,
+        sections: this.preprocessedTimeline.sections.length
+      };
+      console.info(
+        `Audio preprocessing ready: ${this.preprocessMeta.beats} beats, ${this.preprocessMeta.sections} sections.`
+      );
+    }
 
     const audio = document.createElement('audio');
     audio.src = this.objectUrl;
@@ -76,8 +95,7 @@ export class AudioAnalyzer {
   }
 
   async buildPreprocessedTimeline(file) {
-    const buffer = await file.arrayBuffer();
-    const decoded = await this.audioContext.decodeAudioData(buffer.slice(0));
+    const decoded = await this.decodeAudioFile(file);
     const sampleRate = decoded.sampleRate;
     const channelData = decoded.getChannelData(0);
     const duration = decoded.duration;
@@ -198,37 +216,28 @@ export class AudioAnalyzer {
     };
   }
 
-
-  async startFromFile(file) {
-    if (!file) {
-      throw new Error('No audio file selected.');
-    }
-
-    await this.ensureAudioContext();
-
-    this.stop();
-
-    this.objectUrl = URL.createObjectURL(file);
-    const audio = document.createElement('audio');
-    audio.src = this.objectUrl;
-    audio.crossOrigin = 'anonymous';
-    audio.loop = true;
-    audio.preload = 'auto';
-
-    this.sourceNode = this.audioContext.createMediaElementSource(audio);
-    this.mediaElement = audio;
-    this.connectGraph();
+  async decodeAudioFile(file) {
+    const buffer = await file.arrayBuffer();
+    const copied = buffer.slice(0);
 
     try {
-      await audio.play();
-    } catch (error) {
-      this.stop();
-      throw new Error('Audio file could not be played. On iPhone, try selecting the file again after interacting with the page.');
-    }
+      return await this.audioContext.decodeAudioData(copied);
+    } catch (primaryError) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) throw primaryError;
 
-    this.isInitialized = true;
-    this.isRunning = true;
-    return true;
+      const fallbackContext = new AudioCtx();
+      try {
+        if (fallbackContext.state === 'suspended') {
+          await fallbackContext.resume();
+        }
+        return await fallbackContext.decodeAudioData(buffer.slice(0));
+      } finally {
+        if (fallbackContext.state !== 'closed') {
+          await fallbackContext.close();
+        }
+      }
+    }
   }
 
   async startFromYouTube(youtubeUrl) {
@@ -346,6 +355,10 @@ export class AudioAnalyzer {
     return Math.sin(phase * Math.PI * 2);
   }
 
+  getPreprocessMeta() {
+    return this.preprocessMeta;
+  }
+
   getFeatures() {
     if (!this.isRunning || !this.analyser) {
       return this.features;
@@ -453,6 +466,7 @@ export class AudioAnalyzer {
     this.prevEnergy = 0;
     this.lastBeatTime = 0;
     this.preprocessedTimeline = null;
+    this.preprocessMeta = { status: 'idle', reason: null, beats: 0, sections: 0 };
   }
 
   async dispose() {
