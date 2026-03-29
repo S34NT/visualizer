@@ -88,6 +88,11 @@ class MurmurationSimulator {
     this.fpsEstimate = 0;
     this.lastFrameTimestamp = performance.now();
     this.pulseSource = 'live';
+    this.visualSemantics = {
+      bloom: 0.45,
+      vignette: 0.2,
+      chroma: 0.0008
+    };
 
     this.initScene();
   }
@@ -185,6 +190,14 @@ class MurmurationSimulator {
       default:
         return { bloomBase: 0.35, bloomBoost: 0.3, vignette: 0.24, chromaBase: 0.00045, chromaBoost: 0.00018 };
     }
+  }
+
+  smoothVisualSemantics(target, dt) {
+    const tauSeconds = 0.38;
+    const alpha = 1 - Math.exp(-Math.max(0.001, dt) / tauSeconds);
+    this.visualSemantics.bloom += (target.bloom - this.visualSemantics.bloom) * alpha;
+    this.visualSemantics.vignette += (target.vignette - this.visualSemantics.vignette) * alpha;
+    this.visualSemantics.chroma += (target.chroma - this.visualSemantics.chroma) * alpha;
   }
 
   getAudioDeltaTime(playbackTime) {
@@ -385,9 +398,12 @@ class MurmurationSimulator {
     const targetVisualRange = this.baseAudioParams.visualRange + (topologyDrift * 7.5 + bassEnergy * 2.5) * this.progressionProfile.slowLaneGain + pulseVisualNudge;
     const targetProtectedRange = this.baseAudioParams.protectedRange + (topologyDrift * 2.4 + trebleEnergy * 0.5) * this.progressionProfile.slowLaneGain;
     const visualProfile = this.getSectionVisualProfile(this.progressionState);
-    const bloomStrength = visualProfile.bloomBase + loudness * visualProfile.bloomBoost + transient * 0.3;
-    const vignetteStrength = visualProfile.vignette + (1 - loudness) * 0.05;
-    const chromaticAberration = visualProfile.chromaBase + transient * visualProfile.chromaBoost;
+    const targetVisualSemantics = {
+      bloom: visualProfile.bloomBase + loudness * visualProfile.bloomBoost + transient * 0.3,
+      vignette: visualProfile.vignette + (1 - loudness) * 0.05,
+      chroma: visualProfile.chromaBase + transient * visualProfile.chromaBoost
+    };
+    this.smoothVisualSemantics(targetVisualSemantics, dt);
 
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -407,9 +423,9 @@ class MurmurationSimulator {
     this.params.visualRange = this.updateSlowLaneParam(this.params.visualRange, targetVisualRange, dt, this.slowLaneSettings.visualRange);
     this.params.protectedRange = this.updateSlowLaneParam(this.params.protectedRange, targetProtectedRange, dt, this.slowLaneSettings.protectedRange);
     this.sceneManager.setPostProcessing({
-      bloomStrength,
-      vignetteStrength,
-      chromaticAberration
+      bloomStrength: this.visualSemantics.bloom,
+      vignetteStrength: this.visualSemantics.vignette,
+      chromaticAberration: this.visualSemantics.chroma
     });
   }
 
@@ -821,6 +837,11 @@ class MurmurationSimulator {
     this.lastWallClockSampleTime = performance.now();
     this.lastMarginSectionState = null;
     this.marginTarget = this.baseAudioParams.margin;
+    this.visualSemantics = {
+      bloom: 0.45,
+      vignette: 0.2,
+      chroma: 0.0008
+    };
     this.sceneManager?.setAutoRotateSpeed?.(0.12);
   }
 }

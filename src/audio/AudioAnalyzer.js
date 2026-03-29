@@ -108,16 +108,30 @@ export class AudioAnalyzer {
     const hopSize = Math.max(1, Math.floor(sampleRate * hopSec));
     const frameCount = Math.max(1, Math.floor(channelData.length / hopSize));
     const energy = new Float32Array(frameCount);
+    const lowBandEnergy = new Float32Array(frameCount);
+    const highBandEnergy = new Float32Array(frameCount);
+    const lowPassCutoff = 180;
+    const lowPassAlpha = (2 * Math.PI * lowPassCutoff) / (sampleRate + 2 * Math.PI * lowPassCutoff);
+    let lowPassState = 0;
 
     for (let frame = 0; frame < frameCount; frame++) {
       const start = frame * hopSize;
       const end = Math.min(channelData.length, start + hopSize);
       let sumSquares = 0;
+      let lowSumSquares = 0;
+      let highSumSquares = 0;
       for (let i = start; i < end; i++) {
         const sample = channelData[i];
+        lowPassState += lowPassAlpha * (sample - lowPassState);
+        const highComponent = sample - lowPassState;
         sumSquares += sample * sample;
+        lowSumSquares += lowPassState * lowPassState;
+        highSumSquares += highComponent * highComponent;
       }
-      energy[frame] = Math.sqrt(sumSquares / Math.max(1, end - start));
+      const frameSamples = Math.max(1, end - start);
+      energy[frame] = Math.sqrt(sumSquares / frameSamples);
+      lowBandEnergy[frame] = Math.sqrt(lowSumSquares / frameSamples);
+      highBandEnergy[frame] = Math.sqrt(highSumSquares / frameSamples);
     }
 
     let meanEnergy = 0;
@@ -160,12 +174,12 @@ export class AudioAnalyzer {
     let lastState = null;
     let stateStart = 0;
 
-    const averageWindow = (endIndex, windowSize) => {
+    const averageWindow = (endIndex, windowSize, source = energy) => {
       const start = Math.max(0, endIndex - windowSize + 1);
       let sum = 0;
       let count = 0;
       for (let idx = start; idx <= endIndex; idx++) {
-        sum += energy[idx];
+        sum += source[idx];
         count++;
       }
       return count > 0 ? sum / count : 0;
@@ -174,15 +188,49 @@ export class AudioAnalyzer {
     for (let i = 0; i < frameCount; i++) {
       const shortEnergy = averageWindow(i, shortWindowFrames);
       const trendEnergy = averageWindow(i, trendWindowFrames);
-      const delta = shortEnergy - trendEnergy;
+      const shortLow = averageWindow(i, shortWindowFrames, lowBandEnergy);
+      const shortHigh = averageWindow(i, shortWindowFrames, highBandEnergy);
+      const lowRatio = shortLow / Math.max(1e-6, shortLow + shortHigh);
+      const compositeShort = shortEnergy * 0.55 + shortLow * 0.35 + shortHigh * 0.1;
+      const compositeTrend = trendEnergy * 0.55 + averageWindow(i, trendWindowFrames, lowBandEnergy) * 0.35 + averageWindow(i, trendWindowFrames, highBandEnergy) * 0.1;
+      const delta = compositeShort - compositeTrend;
+      const normalizedDelta = delta / Math.max(1e-6, stdDev);
 
-      let nextState = 'calm';
-      if (shortEnergy > beatThreshold * 1.1 || delta > stdDev * 0.32) {
-        nextState = 'peak';
-      } else if (delta > stdDev * 0.16) {
-        nextState = 'rising';
-      } else if (delta < -stdDev * 0.11) {
-        nextState = 'release';
+      let nextState = lastState ?? 'calm';
+      switch (nextState) {
+        case 'peak':
+          if (normalizedDelta < 0.02 && compositeShort < beatThreshold * 1.05) {
+            nextState = 'release';
+          }
+          break;
+        case 'rising':
+          if (normalizedDelta > 0.32 || (compositeShort > beatThreshold * 1.12 && lowRatio > 0.54)) {
+            nextState = 'peak';
+          } else if (normalizedDelta < -0.1) {
+            nextState = 'release';
+          } else if (normalizedDelta < 0.06) {
+            nextState = 'calm';
+          }
+          break;
+        case 'release':
+          if (normalizedDelta > 0.18) {
+            nextState = 'rising';
+          } else if (normalizedDelta > -0.02) {
+            nextState = 'calm';
+          }
+          break;
+        case 'calm':
+        default:
+          if (normalizedDelta > 0.34 || (compositeShort > beatThreshold * 1.14 && lowRatio > 0.56)) {
+            nextState = 'peak';
+          } else if (normalizedDelta > 0.18) {
+            nextState = 'rising';
+          } else if (normalizedDelta < -0.12) {
+            nextState = 'release';
+          } else {
+            nextState = 'calm';
+          }
+          break;
       }
 
       if (lastState === null) {
