@@ -319,8 +319,21 @@ class MurmurationSimulator {
 
     const playbackTime = this.audioAnalyzer.getPlaybackTime();
     const dt = this.getAudioDeltaTime(playbackTime);
-    this.updateProgressionState(loudness, bassEnergy, dt);
-    this.updatePulseClock(playbackTime);
+    const timelineState = this.audioAnalyzer.getTimelineState?.(playbackTime);
+    const timelinePulse = this.audioAnalyzer.getTimelinePulse?.(playbackTime);
+
+    if (timelineState) {
+      this.progressionState = timelineState;
+      this.progressionProfile = this.getProgressionProfile(this.progressionState);
+    } else {
+      this.updateProgressionState(loudness, bassEnergy, dt);
+    }
+
+    if (typeof timelinePulse === 'number' && Number.isFinite(timelinePulse)) {
+      this.pulseDepth = timelinePulse;
+    } else {
+      this.updatePulseClock(playbackTime);
+    }
 
     if (loudness < 0.01) {
       this.noAudioFrames++;
