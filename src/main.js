@@ -80,6 +80,16 @@ class MurmurationSimulator {
       centeringFactor: { attackTau: 8.5, releaseTau: 10.5, maxStep: 0.000012, min: 0, max: 0.002 },
       maxDistance: { attackTau: 7.5, releaseTau: 9.5, maxStep: 2.0, min: 30, max: 500 }
     };
+    this.debugOptions = {
+      showDebugHud: true,
+      usePreprocessedTimeline: true,
+      benchmarkEnabled: false
+    };
+    this.debugHudEl = null;
+    this.lastHudUpdateAt = 0;
+    this.fpsEstimate = 0;
+    this.lastFrameTimestamp = performance.now();
+    this.pulseSource = 'live';
 
     this.initScene();
   }
@@ -88,6 +98,7 @@ class MurmurationSimulator {
     await this.initFlock();
     this.initGUI();
     this.initStats();
+    this.initDebugHud();
     this.initKeyboard();
     this.initAudioLinkButton();
 
@@ -136,6 +147,7 @@ class MurmurationSimulator {
       if (this.audioLinkButton) {
         this.audioLinkButton.textContent = '🎵 Audio File Loaded';
       }
+      this.updateDebugHud(true);
     } catch (error) {
       console.error('Failed to initialize audio analyzer:', error);
       this.showStatus(`Audio load failed: ${error.message}`, true);
@@ -324,8 +336,12 @@ class MurmurationSimulator {
 
     const playbackTime = this.audioAnalyzer.getPlaybackTime();
     const dt = this.getAudioDeltaTime(playbackTime);
-    const timelineState = this.audioAnalyzer.getTimelineState?.(playbackTime);
-    const timelinePulse = this.audioAnalyzer.getTimelinePulse?.(playbackTime);
+    const timelineState = this.debugOptions.usePreprocessedTimeline
+      ? this.audioAnalyzer.getTimelineState?.(playbackTime)
+      : null;
+    const timelinePulse = this.debugOptions.usePreprocessedTimeline
+      ? this.audioAnalyzer.getTimelinePulse?.(playbackTime)
+      : null;
 
     if (timelineState) {
       this.progressionState = timelineState;
@@ -336,8 +352,10 @@ class MurmurationSimulator {
 
     if (typeof timelinePulse === 'number' && Number.isFinite(timelinePulse)) {
       this.pulseDepth = timelinePulse;
+      this.pulseSource = 'timeline';
     } else {
       this.updatePulseClock(playbackTime);
+      this.pulseSource = 'live';
     }
 
     if (loudness < 0.01) {
@@ -485,8 +503,14 @@ class MurmurationSimulator {
       onReset: () => this.reset(),
       onTogglePause: () => this.togglePause(),
       onScreenshot: () => this.takeScreenshot(),
-      onFullscreen: () => this.toggleFullscreen()
-    });
+      onFullscreen: () => this.toggleFullscreen(),
+      onDebugHudChange: (enabled) => this.setDebugHudVisible(enabled),
+      onTimelineToggle: (enabled) => {
+        this.debugOptions.usePreprocessedTimeline = enabled;
+        this.updateDebugHud(true);
+      },
+      onBenchmarkToggle: (enabled) => this.setBenchmarkEnabled(enabled)
+    }, this.debugOptions);
   }
 
   showStatus(message, isError = false, autoHide = 0) {
@@ -530,8 +554,70 @@ class MurmurationSimulator {
     document.body.appendChild(this.stats.dom);
   }
 
+  initDebugHud() {
+    if (this.debugHudEl) return;
+
+    this.debugHudEl = document.createElement('div');
+    this.debugHudEl.id = 'debug-hud';
+    this.debugHudEl.style.cssText = `
+      position: fixed;
+      top: 56px;
+      left: 12px;
+      z-index: 1003;
+      min-width: 270px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(8, 14, 24, 0.82);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #d7f2ff;
+      font: 12px/1.4 'SF Mono', 'Fira Code', monospace;
+      pointer-events: none;
+      backdrop-filter: blur(5px);
+      white-space: pre-line;
+    `;
+    document.body.appendChild(this.debugHudEl);
+    this.setDebugHudVisible(this.debugOptions.showDebugHud);
+    this.updateDebugHud(true);
+  }
+
+  setDebugHudVisible(enabled) {
+    this.debugOptions.showDebugHud = enabled;
+    if (this.debugHudEl) {
+      this.debugHudEl.style.display = enabled ? 'block' : 'none';
+    }
+  }
+
+  updateDebugHud(force = false) {
+    if (!this.debugHudEl || !this.debugOptions.showDebugHud) return;
+
+    const now = performance.now();
+    if (!force && now - this.lastHudUpdateAt < 220) return;
+    this.lastHudUpdateAt = now;
+
+    const preprocessMeta = this.audioAnalyzer?.getPreprocessMeta?.() || { status: 'idle', beats: 0, sections: 0 };
+    const preprocessSummary = preprocessMeta.status === 'ready'
+      ? `${preprocessMeta.status} (${preprocessMeta.beats} beats/${preprocessMeta.sections} sections)`
+      : preprocessMeta.status;
+
+    this.debugHudEl.textContent = [
+      `Backend: ${this.backendVariant || this.flockBackend}`,
+      `Preprocess: ${preprocessSummary}`,
+      `Timeline mode: ${this.debugOptions.usePreprocessedTimeline ? 'enabled' : 'disabled'}`,
+      `Section: ${this.progressionState}`,
+      `Pulse source: ${this.pulseSource}`,
+      `FPS(est): ${this.fpsEstimate.toFixed(1)}`,
+      `Birds: ${this.flock?.count ?? this.params.birdCount}`
+    ].join('\n');
+  }
+
+  setBenchmarkEnabled(enabled) {
+    if (this.benchmarkEnabled === enabled) return;
+    this.toggleBenchmark();
+  }
+
   toggleBenchmark() {
     this.benchmarkEnabled = !this.benchmarkEnabled;
+    this.debugOptions.benchmarkEnabled = this.benchmarkEnabled;
     this.benchmark.frames = 0;
     this.benchmark.simMs = 0;
     this.benchmark.frameMs = 0;
@@ -544,6 +630,7 @@ class MurmurationSimulator {
       false,
       2600
     );
+    this.updateDebugHud(true);
   }
 
   maybeReportBenchmark() {
@@ -651,6 +738,10 @@ class MurmurationSimulator {
     requestAnimationFrame(this.animate);
 
     const frameStart = performance.now();
+    const frameDt = Math.max(0.001, frameStart - this.lastFrameTimestamp);
+    this.lastFrameTimestamp = frameStart;
+    const instantFps = 1000 / frameDt;
+    this.fpsEstimate += (instantFps - this.fpsEstimate) * 0.12;
     this.stats.begin();
     this.time = timestamp * 0.001;
 
@@ -658,6 +749,7 @@ class MurmurationSimulator {
       this.applyAudioReactiveModulation();
       this.sceneManager.setAutoRotateSpeed(0.12 + this.intensity * 2.0 * this.progressionProfile.cameraGain);
       this.maybeRefreshGuiDisplay();
+      this.updateDebugHud();
       const simStart = performance.now();
       this.flock.update(this.params);
       this.flockRenderer.update(this.time);
@@ -692,6 +784,11 @@ class MurmurationSimulator {
     if (this.audioFileInput) {
       this.audioFileInput.remove();
       this.audioFileInput = null;
+    }
+
+    if (this.debugHudEl) {
+      this.debugHudEl.remove();
+      this.debugHudEl = null;
     }
 
     this.noAudioFrames = 0;

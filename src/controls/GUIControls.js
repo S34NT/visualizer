@@ -2,9 +2,10 @@ import GUI from 'lil-gui';
 import { presets } from '../config/defaults.js';
 
 export class GUIControls {
-  constructor(params, callbacks) {
+  constructor(params, callbacks, debugOptions = null) {
     this.params = params;
     this.callbacks = callbacks;
+    this.debugOptions = debugOptions;
     this.gui = new GUI({ title: 'Murmuration Controls' });
 
     this.initControls();
@@ -65,6 +66,19 @@ export class GUIControls {
     actionsFolder.add({
       fullscreen: () => this.callbacks.onFullscreen?.()
     }, 'fullscreen').name('Fullscreen');
+
+    if (this.debugOptions) {
+      const debugFolder = this.gui.addFolder('Debug');
+      debugFolder.add(this.debugOptions, 'showDebugHud')
+        .name('Show Debug HUD')
+        .onChange((value) => this.callbacks.onDebugHudChange?.(value));
+      debugFolder.add(this.debugOptions, 'usePreprocessedTimeline')
+        .name('Use Timeline')
+        .onChange((value) => this.callbacks.onTimelineToggle?.(value));
+      debugFolder.add(this.debugOptions, 'benchmarkEnabled')
+        .name('Benchmark Logs')
+        .onChange((value) => this.callbacks.onBenchmarkToggle?.(value));
+    }
 
     flockFolder.open();
     behaviorFolder.open();
