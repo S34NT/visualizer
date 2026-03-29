@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 export class SceneManager {
   constructor(container) {
@@ -44,6 +48,79 @@ export class SceneManager {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     
     this.container.appendChild(this.renderer.domElement);
+    this.initPostProcessing();
+  }
+
+  initPostProcessing() {
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.setSize(this.width, this.height);
+
+    this.renderPass = new RenderPass(this.scene, this.camera);
+    this.composer.addPass(this.renderPass);
+
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(this.width, this.height), 0.45, 0.55, 0.82);
+    this.composer.addPass(this.bloomPass);
+
+    const vignetteShader = {
+      uniforms: {
+        tDiffuse: { value: null },
+        strength: { value: 0.18 },
+        softness: { value: 0.35 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float strength;
+        uniform float softness;
+        varying vec2 vUv;
+
+        void main() {
+          vec4 color = texture2D(tDiffuse, vUv);
+          vec2 uv = vUv - 0.5;
+          float dist = dot(uv, uv) * 2.8;
+          float vignette = smoothstep(0.15, 1.0 - softness, dist);
+          color.rgb *= (1.0 - vignette * strength);
+          gl_FragColor = color;
+        }
+      `
+    };
+    this.vignettePass = new ShaderPass(vignetteShader);
+    this.composer.addPass(this.vignettePass);
+
+    const chromaShader = {
+      uniforms: {
+        tDiffuse: { value: null },
+        amount: { value: 0.0008 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform float amount;
+        varying vec2 vUv;
+
+        void main() {
+          vec2 offset = (vUv - 0.5) * amount;
+          vec4 r = texture2D(tDiffuse, vUv + offset);
+          vec4 g = texture2D(tDiffuse, vUv);
+          vec4 b = texture2D(tDiffuse, vUv - offset);
+          gl_FragColor = vec4(r.r, g.g, b.b, g.a);
+        }
+      `
+    };
+    this.chromaticPass = new ShaderPass(chromaShader);
+    this.composer.addPass(this.chromaticPass);
   }
   
   initControls() {
@@ -86,6 +163,8 @@ export class SceneManager {
       
       this.renderer.setSize(this.width, this.height);
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.composer?.setSize(this.width, this.height);
+      this.bloomPass?.setSize(this.width, this.height);
     });
   }
   
@@ -106,7 +185,23 @@ export class SceneManager {
   }
   
   render() {
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
+  setPostProcessing({ bloomStrength, vignetteStrength, chromaticAberration }) {
+    if (this.bloomPass && Number.isFinite(bloomStrength)) {
+      this.bloomPass.strength = Math.min(1.9, Math.max(0.0, bloomStrength));
+    }
+    if (this.vignettePass && Number.isFinite(vignetteStrength)) {
+      this.vignettePass.uniforms.strength.value = Math.min(0.45, Math.max(0.0, vignetteStrength));
+    }
+    if (this.chromaticPass && Number.isFinite(chromaticAberration)) {
+      this.chromaticPass.uniforms.amount.value = Math.min(0.0035, Math.max(0.0, chromaticAberration));
+    }
   }
   
   getCanvas() {
@@ -121,7 +216,6 @@ export class SceneManager {
     this.controls.saveState();
   }
 }
-
 
 
 

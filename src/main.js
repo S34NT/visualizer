@@ -175,6 +175,20 @@ class MurmurationSimulator {
     }
   }
 
+  getSectionVisualProfile(state) {
+    switch (state) {
+      case 'peak':
+        return { bloomBase: 0.82, bloomBoost: 1.0, vignette: 0.2, chromaBase: 0.0013, chromaBoost: 0.0014 };
+      case 'rising':
+        return { bloomBase: 0.62, bloomBoost: 0.75, vignette: 0.17, chromaBase: 0.00095, chromaBoost: 0.0008 };
+      case 'release':
+        return { bloomBase: 0.45, bloomBoost: 0.5, vignette: 0.22, chromaBase: 0.0006, chromaBoost: 0.0003 };
+      case 'calm':
+      default:
+        return { bloomBase: 0.35, bloomBoost: 0.3, vignette: 0.24, chromaBase: 0.00045, chromaBoost: 0.00018 };
+    }
+  }
+
   getAudioDeltaTime(playbackTime) {
     const now = performance.now();
     const wallDt = Math.max(1 / 120, (now - this.lastWallClockSampleTime) / 1000);
@@ -389,6 +403,10 @@ class MurmurationSimulator {
     const pulseVisualNudge = this.pulseDepth * 1.1 * this.progressionProfile.slowLaneGain;
     const targetVisualRange = this.baseAudioParams.visualRange + (topologyDrift * 7.5 + bassEnergy * 2.5) * this.progressionProfile.slowLaneGain + pulseVisualNudge;
     const targetProtectedRange = this.baseAudioParams.protectedRange + (topologyDrift * 2.4 + trebleEnergy * 0.5) * this.progressionProfile.slowLaneGain;
+    const visualProfile = this.getSectionVisualProfile(this.progressionState);
+    const bloomStrength = visualProfile.bloomBase + loudness * visualProfile.bloomBoost + transient * 0.3;
+    const vignetteStrength = visualProfile.vignette + (1 - loudness) * 0.05;
+    const chromaticAberration = visualProfile.chromaBase + transient * visualProfile.chromaBoost;
 
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -407,6 +425,11 @@ class MurmurationSimulator {
     this.params.margin = this.normalizeMarginStep(this.marginTarget);
     this.params.visualRange = this.updateSlowLaneParam(this.params.visualRange, targetVisualRange, dt, this.slowLaneSettings.visualRange);
     this.params.protectedRange = this.updateSlowLaneParam(this.params.protectedRange, targetProtectedRange, dt, this.slowLaneSettings.protectedRange);
+    this.sceneManager.setPostProcessing({
+      bloomStrength,
+      vignetteStrength,
+      chromaticAberration
+    });
   }
 
   initAudioLinkButton() {
