@@ -63,9 +63,23 @@ class MurmurationSimulator {
     this.intensity = 0;
     this.energyShort = 0;
     this.energyTrend = 0;
+    this.lastProgressionSampleTime = 0;
     this.progressionState = 'calm';
     this.progressionProfile = { slowLaneGain: 0.75, marginPositiveBias: 0.5, cameraGain: 1.0 };
     this.lastProgressionStateChangeAt = 0;
+    this.lastWallClockSampleTime = performance.now();
+    this.pulseClockStarted = false;
+    this.pulseClockStartTime = 0;
+    this.lastPulseIndex = -1;
+    this.pulseDepth = 0;
+    this.pulseIntervalSec = 0.75;
+    this.slowLaneSettings = {
+      deadbandRel: 0.01,
+      visualRange: { attackTau: 6.5, releaseTau: 8.5, maxStep: 0.18, min: 10, max: 100 },
+      protectedRange: { attackTau: 6.0, releaseTau: 8.0, maxStep: 0.09, min: 2, max: 30 },
+      centeringFactor: { attackTau: 8.5, releaseTau: 10.5, maxStep: 0.000012, min: 0, max: 0.002 },
+      maxDistance: { attackTau: 7.5, releaseTau: 9.5, maxStep: 2.0, min: 30, max: 500 }
+    };
 
     this.initScene();
   }
@@ -133,27 +147,47 @@ class MurmurationSimulator {
   getProgressionProfile(state) {
     switch (state) {
       case 'rising':
-        return { slowLaneGain: 1.0, marginPositiveBias: 0.6, cameraGain: 1.5 };
+        return { slowLaneGain: 1.0, marginPositiveBias: 0.58, cameraGain: 1.5 };
       case 'peak':
-        return { slowLaneGain: 1.25, marginPositiveBias: 0.7, cameraGain: 2.2 };
+        return { slowLaneGain: 1.25, marginPositiveBias: 0.66, cameraGain: 2.2 };
       case 'release':
-        return { slowLaneGain: 0.85, marginPositiveBias: 0.4, cameraGain: 0.9 };
+        return { slowLaneGain: 0.85, marginPositiveBias: 0.43, cameraGain: 0.9 };
       case 'calm':
       default:
-        return { slowLaneGain: 0.7, marginPositiveBias: 0.5, cameraGain: 0.7 };
+        return { slowLaneGain: 0.7, marginPositiveBias: 0.46, cameraGain: 0.7 };
     }
   }
 
-  updateProgressionState(loudness, bassEnergy, midEnergy, trebleEnergy) {
-    const compositeEnergy =
-      loudness * 0.45 +
-      bassEnergy * 0.3 +
-      midEnergy * 0.2 +
-      trebleEnergy * 0.05;
+  getAudioDeltaTime(playbackTime) {
+    const now = performance.now();
+    const wallDt = Math.max(1 / 120, (now - this.lastWallClockSampleTime) / 1000);
+    this.lastWallClockSampleTime = now;
 
-    const lerp = (current, target, alpha) => current + (target - current) * alpha;
-    this.energyShort = lerp(this.energyShort, compositeEnergy, 0.2);
-    this.energyTrend = lerp(this.energyTrend, compositeEnergy, 0.03);
+    if (!Number.isFinite(playbackTime)) return wallDt;
+    if (playbackTime <= 0) return wallDt;
+    if (this.lastProgressionSampleTime <= 0) {
+      this.lastProgressionSampleTime = playbackTime;
+      return wallDt;
+    }
+
+    const playbackDt = playbackTime - this.lastProgressionSampleTime;
+    this.lastProgressionSampleTime = playbackTime;
+    if (playbackDt <= 0 || playbackDt > 2) return wallDt;
+    return playbackDt;
+  }
+
+  smoothingAlpha(dt, tauSeconds) {
+    const tau = Math.max(0.001, tauSeconds);
+    return 1 - Math.exp(-dt / tau);
+  }
+
+  updateProgressionState(loudness, bassEnergy, dt) {
+    const compositeEnergy = loudness * 0.55 + bassEnergy * 0.45;
+
+    const shortAlpha = this.smoothingAlpha(dt, 1.4);
+    const trendAlpha = this.smoothingAlpha(dt, 10.5);
+    this.energyShort += (compositeEnergy - this.energyShort) * shortAlpha;
+    this.energyTrend += (compositeEnergy - this.energyTrend) * trendAlpha;
 
     const now = performance.now();
     const delta = this.energyShort - this.energyTrend;
@@ -175,6 +209,45 @@ class MurmurationSimulator {
     }
 
     this.progressionProfile = this.getProgressionProfile(this.progressionState);
+  }
+
+  updatePulseClock(playbackTime) {
+    if (playbackTime < this.pulseClockStartTime) {
+      this.pulseClockStarted = false;
+      this.pulseClockStartTime = 0;
+      this.lastPulseIndex = -1;
+      this.pulseDepth = 0;
+    }
+
+    if (!this.pulseClockStarted) {
+      this.pulseClockStarted = true;
+      this.pulseClockStartTime = playbackTime;
+      this.lastPulseIndex = 0;
+      return;
+    }
+
+    const elapsed = Math.max(0, playbackTime - this.pulseClockStartTime);
+    const pulseIndex = Math.floor(elapsed / this.pulseIntervalSec);
+    if (pulseIndex > this.lastPulseIndex) {
+      this.lastPulseIndex = pulseIndex;
+    }
+
+    const pulsePhase = (elapsed % this.pulseIntervalSec) / this.pulseIntervalSec;
+    this.pulseDepth = Math.sin(pulsePhase * Math.PI * 2);
+  }
+
+  updateSlowLaneParam(current, target, dt, config) {
+    const magnitude = Math.max(Math.abs(current), Math.abs(target), 1e-6);
+    const relativeDelta = Math.abs(target - current) / magnitude;
+    if (relativeDelta < this.slowLaneSettings.deadbandRel) {
+      return current;
+    }
+
+    const tau = target > current ? config.attackTau : config.releaseTau;
+    const alpha = this.smoothingAlpha(dt, tau);
+    const rawNext = current + (target - current) * alpha;
+    const step = Math.max(-config.maxStep, Math.min(config.maxStep, rawNext - current));
+    return Math.min(config.max, Math.max(config.min, current + step));
   }
 
   normalizeMarginStep(value) {
@@ -244,7 +317,10 @@ class MurmurationSimulator {
     const trebleEnergy = shaped(treble * 2.2, 1.15);
     const transient = shaped(peak * 1.8, 1.0);
 
-    this.updateProgressionState(loudness, bassEnergy, midEnergy, trebleEnergy);
+    const playbackTime = this.audioAnalyzer.getPlaybackTime();
+    const dt = this.getAudioDeltaTime(playbackTime);
+    this.updateProgressionState(loudness, bassEnergy, dt);
+    this.updatePulseClock(playbackTime);
 
     if (loudness < 0.01) {
       this.noAudioFrames++;
@@ -274,26 +350,27 @@ class MurmurationSimulator {
       Math.sin(this.evolutionPhase) * 0.65 +
       Math.sin(this.evolutionPhaseSecondary + Math.PI * 0.25) * 0.35;
 
-    const targetVisualRange = this.baseAudioParams.visualRange + (topologyDrift * 7.5 + bassEnergy * 2.5) * this.progressionProfile.slowLaneGain;
+    const pulseVisualNudge = this.pulseDepth * 1.1 * this.progressionProfile.slowLaneGain;
+    const targetVisualRange = this.baseAudioParams.visualRange + (topologyDrift * 7.5 + bassEnergy * 2.5) * this.progressionProfile.slowLaneGain + pulseVisualNudge;
     const targetProtectedRange = this.baseAudioParams.protectedRange + (topologyDrift * 2.4 + trebleEnergy * 0.5) * this.progressionProfile.slowLaneGain;
 
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-    this.maybeStepMarginOnMeasure(this.audioAnalyzer.getPlaybackTime(), bassEnergy, this.progressionProfile.marginPositiveBias);
+    this.maybeStepMarginOnMeasure(playbackTime, bassEnergy, this.progressionProfile.marginPositiveBias);
 
     this.params.maxSpeed = targetMaxSpeed;
     this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
     this.params.avoidFactor = lerp(this.params.avoidFactor, targetAvoid, 0.12);
     this.params.turnFactor = clamp(lerp(this.params.turnFactor, targetTurn, 0.25), 0, 0.5);
     this.params.particleSize = lerp(this.params.particleSize, targetParticleSize, 0.18);
-    this.params.maxDistance = lerp(this.params.maxDistance, targetMaxDistance, 0.1);
-    this.params.centeringFactor = lerp(this.params.centeringFactor, targetCentering, 0.08);
+    this.params.maxDistance = this.updateSlowLaneParam(this.params.maxDistance, targetMaxDistance, dt, this.slowLaneSettings.maxDistance);
+    this.params.centeringFactor = this.updateSlowLaneParam(this.params.centeringFactor, targetCentering, dt, this.slowLaneSettings.centeringFactor);
     this.params.minSpeed = clamp(lerp(this.params.minSpeed, targetMinSpeed, 0.18), 1, 10);
     this.params.maxSpeed = Math.max(targetMaxSpeed, this.params.minSpeed + 0.1);
     this.params.margin = this.normalizeMarginStep(this.marginTarget);
-    this.params.visualRange = clamp(lerp(this.params.visualRange, targetVisualRange, 0.05), 10, 100);
-    this.params.protectedRange = clamp(lerp(this.params.protectedRange, targetProtectedRange, 0.05), 2, 30);
+    this.params.visualRange = this.updateSlowLaneParam(this.params.visualRange, targetVisualRange, dt, this.slowLaneSettings.visualRange);
+    this.params.protectedRange = this.updateSlowLaneParam(this.params.protectedRange, targetProtectedRange, dt, this.slowLaneSettings.protectedRange);
   }
 
   initAudioLinkButton() {
@@ -603,9 +680,15 @@ class MurmurationSimulator {
     this.intensity = 0;
     this.energyShort = 0;
     this.energyTrend = 0;
+    this.lastProgressionSampleTime = 0;
     this.progressionState = 'calm';
     this.progressionProfile = { slowLaneGain: 0.75, marginPositiveBias: 0.5, cameraGain: 1.0 };
     this.lastProgressionStateChangeAt = 0;
+    this.pulseClockStarted = false;
+    this.pulseClockStartTime = 0;
+    this.lastPulseIndex = -1;
+    this.pulseDepth = 0;
+    this.lastWallClockSampleTime = performance.now();
     this.lastMarginMeasureIndex = -1;
     this.lastMarginPlaybackTime = 0;
     this.marginClockStarted = false;
