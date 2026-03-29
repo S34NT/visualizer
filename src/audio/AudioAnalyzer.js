@@ -198,6 +198,39 @@ export class AudioAnalyzer {
     };
   }
 
+
+  async startFromFile(file) {
+    if (!file) {
+      throw new Error('No audio file selected.');
+    }
+
+    await this.ensureAudioContext();
+
+    this.stop();
+
+    this.objectUrl = URL.createObjectURL(file);
+    const audio = document.createElement('audio');
+    audio.src = this.objectUrl;
+    audio.crossOrigin = 'anonymous';
+    audio.loop = true;
+    audio.preload = 'auto';
+
+    this.sourceNode = this.audioContext.createMediaElementSource(audio);
+    this.mediaElement = audio;
+    this.connectGraph();
+
+    try {
+      await audio.play();
+    } catch (error) {
+      this.stop();
+      throw new Error('Audio file could not be played. On iPhone, try selecting the file again after interacting with the page.');
+    }
+
+    this.isInitialized = true;
+    this.isRunning = true;
+    return true;
+  }
+
   async startFromYouTube(youtubeUrl) {
     if (this.isRunning) return true;
 
