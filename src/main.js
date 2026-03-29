@@ -507,7 +507,7 @@ class MurmurationSimulator {
 
     if (!this.isPaused) {
       this.applyAudioReactiveModulation();
-      this.sceneManager.setAutoRotateSpeed(0.4 + this.intensity * 1.2);
+      this.sceneManager.setAutoRotateSpeed(0.12 + this.intensity * 2.0);
       this.maybeRefreshGuiDisplay();
       const simStart = performance.now();
       this.flock.update(this.params);
@@ -552,7 +552,7 @@ class MurmurationSimulator {
     this.marginClockStarted = false;
     this.marginClockStartTime = 0;
     this.marginTarget = this.baseAudioParams.margin;
-    this.sceneManager?.setAutoRotateSpeed?.(0.4);
+    this.sceneManager?.setAutoRotateSpeed?.(0.12);
   }
 }
 

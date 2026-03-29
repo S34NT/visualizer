@@ -26,7 +26,7 @@ export class SceneManager {
   initCamera() {
     const aspect = this.width / this.height;
     this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 2000);
-    this.defaultCameraPosition = new THREE.Vector3(280, 180, 620);
+    this.defaultCameraPosition = new THREE.Vector3(0, 0, 1400);
     this.defaultCameraTarget = new THREE.Vector3(0, 0, 0);
     this.camera.position.copy(this.defaultCameraPosition);
     this.camera.lookAt(this.defaultCameraTarget);
@@ -53,12 +53,12 @@ export class SceneManager {
     this.controls.dampingFactor = 0.05;
     this.controls.rotateSpeed = 0.8;
     this.controls.autoRotate = true;
-    this.baseAutoRotateSpeed = 0.4;
+    this.baseAutoRotateSpeed = 0.12;
     this.controls.autoRotateSpeed = this.baseAutoRotateSpeed;
     this.controls.zoomSpeed = 1.2;
     this.controls.panSpeed = 0.8;
     this.controls.minDistance = 50;
-    this.controls.maxDistance = 1000;
+    this.controls.maxDistance = 2000;
     this.controls.enablePan = true;
     
     // Touch support
@@ -98,7 +98,7 @@ export class SceneManager {
   }
   
   setAutoRotateSpeed(speed) {
-    this.controls.autoRotateSpeed = Math.max(0.05, speed);
+    this.controls.autoRotateSpeed = Math.min(2.5, Math.max(0.08, speed));
   }
 
   update() {
