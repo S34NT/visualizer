@@ -12,6 +12,8 @@ export class AudioAnalyzer {
     this.analyser = null;
     this.gainNode = null;
     this.mediaStream = null;
+    this.mediaElement = null;
+    this.objectUrl = null;
 
     this.freqData = null;
     this.timeData = null;
@@ -25,12 +27,265 @@ export class AudioAnalyzer {
       mid: 0,
       treble: 0,
       beat: 0,
+      beatCount: 0,
       peak: 0
     };
 
     this.prevEnergy = 0;
     this.lastBeatTime = 0;
     this.cooldownMs = options.cooldownMs ?? 120;
+    this.preprocessedTimeline = null;
+    this.preprocessMeta = { status: 'idle', reason: null, beats: 0, sections: 0 };
+  }
+
+
+  async startFromFile(file) {
+    if (!file) {
+      throw new Error('No audio file selected.');
+    }
+
+    await this.ensureAudioContext();
+
+    this.stop();
+
+    this.objectUrl = URL.createObjectURL(file);
+    this.preprocessMeta = { status: 'processing', reason: null, beats: 0, sections: 0 };
+    this.preprocessedTimeline = await this.buildPreprocessedTimeline(file).catch((error) => {
+      this.preprocessMeta = {
+        status: 'disabled',
+        reason: error?.message || String(error),
+        beats: 0,
+        sections: 0
+      };
+      console.warn('Audio preprocessing disabled for this file:', error);
+      return null;
+    });
+    if (this.preprocessedTimeline) {
+      this.preprocessMeta = {
+        status: 'ready',
+        reason: null,
+        beats: this.preprocessedTimeline.beats.length,
+        sections: this.preprocessedTimeline.sections.length
+      };
+      console.info(
+        `Audio preprocessing ready: ${this.preprocessMeta.beats} beats, ${this.preprocessMeta.sections} sections.`
+      );
+    }
+
+    const audio = document.createElement('audio');
+    audio.src = this.objectUrl;
+    audio.crossOrigin = 'anonymous';
+    audio.loop = true;
+    audio.preload = 'auto';
+
+    this.sourceNode = this.audioContext.createMediaElementSource(audio);
+    this.mediaElement = audio;
+    this.connectGraph();
+
+    try {
+      await audio.play();
+    } catch (error) {
+      this.stop();
+      throw new Error('Audio file could not be played. On iPhone, try selecting the file again after interacting with the page.');
+    }
+
+    this.isInitialized = true;
+    this.isRunning = true;
+    return true;
+  }
+
+  async buildPreprocessedTimeline(file) {
+    const decoded = await this.decodeAudioFile(file);
+    const sampleRate = decoded.sampleRate;
+    const channelData = decoded.getChannelData(0);
+    const duration = decoded.duration;
+
+    if (!channelData || !channelData.length || !duration) {
+      return null;
+    }
+
+    const hopSec = 0.1;
+    const hopSize = Math.max(1, Math.floor(sampleRate * hopSec));
+    const frameCount = Math.max(1, Math.floor(channelData.length / hopSize));
+    const energy = new Float32Array(frameCount);
+    const lowBandEnergy = new Float32Array(frameCount);
+    const highBandEnergy = new Float32Array(frameCount);
+    const lowPassCutoff = 180;
+    const lowPassAlpha = (2 * Math.PI * lowPassCutoff) / (sampleRate + 2 * Math.PI * lowPassCutoff);
+    let lowPassState = 0;
+
+    for (let frame = 0; frame < frameCount; frame++) {
+      const start = frame * hopSize;
+      const end = Math.min(channelData.length, start + hopSize);
+      let sumSquares = 0;
+      let lowSumSquares = 0;
+      let highSumSquares = 0;
+      for (let i = start; i < end; i++) {
+        const sample = channelData[i];
+        lowPassState += lowPassAlpha * (sample - lowPassState);
+        const highComponent = sample - lowPassState;
+        sumSquares += sample * sample;
+        lowSumSquares += lowPassState * lowPassState;
+        highSumSquares += highComponent * highComponent;
+      }
+      const frameSamples = Math.max(1, end - start);
+      energy[frame] = Math.sqrt(sumSquares / frameSamples);
+      lowBandEnergy[frame] = Math.sqrt(lowSumSquares / frameSamples);
+      highBandEnergy[frame] = Math.sqrt(highSumSquares / frameSamples);
+    }
+
+    let meanEnergy = 0;
+    for (let i = 0; i < frameCount; i++) meanEnergy += energy[i];
+    meanEnergy /= frameCount;
+
+    let variance = 0;
+    for (let i = 0; i < frameCount; i++) {
+      const delta = energy[i] - meanEnergy;
+      variance += delta * delta;
+    }
+    const stdDev = Math.sqrt(variance / frameCount);
+    const beatThreshold = meanEnergy + stdDev * 0.55;
+    const beatCooldownFrames = Math.max(2, Math.round(0.28 / hopSec));
+
+    const beats = [];
+    let lastBeatFrame = -beatCooldownFrames;
+    for (let i = 1; i < frameCount - 1; i++) {
+      const current = energy[i];
+      if (current < beatThreshold) continue;
+      if (current <= energy[i - 1] || current < energy[i + 1]) continue;
+      if (i - lastBeatFrame < beatCooldownFrames) continue;
+
+      beats.push(i * hopSec);
+      lastBeatFrame = i;
+    }
+
+    const beatIntervals = [];
+    for (let i = 1; i < beats.length; i++) {
+      beatIntervals.push(beats[i] - beats[i - 1]);
+    }
+    const sortedIntervals = beatIntervals.filter((v) => v > 0.2 && v < 1.5).sort((a, b) => a - b);
+    const medianBeatInterval = sortedIntervals.length
+      ? sortedIntervals[Math.floor(sortedIntervals.length / 2)]
+      : 0.75;
+
+    const shortWindowFrames = Math.max(6, Math.round(3 / hopSec));
+    const trendWindowFrames = Math.max(shortWindowFrames + 1, Math.round(12 / hopSec));
+    const sections = [];
+    let lastState = null;
+    let stateStart = 0;
+
+    const averageWindow = (endIndex, windowSize, source = energy) => {
+      const start = Math.max(0, endIndex - windowSize + 1);
+      let sum = 0;
+      let count = 0;
+      for (let idx = start; idx <= endIndex; idx++) {
+        sum += source[idx];
+        count++;
+      }
+      return count > 0 ? sum / count : 0;
+    };
+
+    for (let i = 0; i < frameCount; i++) {
+      const shortEnergy = averageWindow(i, shortWindowFrames);
+      const trendEnergy = averageWindow(i, trendWindowFrames);
+      const shortLow = averageWindow(i, shortWindowFrames, lowBandEnergy);
+      const shortHigh = averageWindow(i, shortWindowFrames, highBandEnergy);
+      const lowRatio = shortLow / Math.max(1e-6, shortLow + shortHigh);
+      const compositeShort = shortEnergy * 0.55 + shortLow * 0.35 + shortHigh * 0.1;
+      const compositeTrend = trendEnergy * 0.55 + averageWindow(i, trendWindowFrames, lowBandEnergy) * 0.35 + averageWindow(i, trendWindowFrames, highBandEnergy) * 0.1;
+      const delta = compositeShort - compositeTrend;
+      const normalizedDelta = delta / Math.max(1e-6, stdDev);
+
+      let nextState = lastState ?? 'calm';
+      switch (nextState) {
+        case 'peak':
+          if (normalizedDelta < 0.02 && compositeShort < beatThreshold * 1.05) {
+            nextState = 'release';
+          }
+          break;
+        case 'rising':
+          if (normalizedDelta > 0.32 || (compositeShort > beatThreshold * 1.12 && lowRatio > 0.54)) {
+            nextState = 'peak';
+          } else if (normalizedDelta < -0.1) {
+            nextState = 'release';
+          } else if (normalizedDelta < 0.06) {
+            nextState = 'calm';
+          }
+          break;
+        case 'release':
+          if (normalizedDelta > 0.18) {
+            nextState = 'rising';
+          } else if (normalizedDelta > -0.02) {
+            nextState = 'calm';
+          }
+          break;
+        case 'calm':
+        default:
+          if (normalizedDelta > 0.34 || (compositeShort > beatThreshold * 1.14 && lowRatio > 0.56)) {
+            nextState = 'peak';
+          } else if (normalizedDelta > 0.18) {
+            nextState = 'rising';
+          } else if (normalizedDelta < -0.12) {
+            nextState = 'release';
+          } else {
+            nextState = 'calm';
+          }
+          break;
+      }
+
+      if (lastState === null) {
+        lastState = nextState;
+        stateStart = i * hopSec;
+        continue;
+      }
+
+      if (nextState !== lastState) {
+        const now = i * hopSec;
+        if (now - stateStart >= 2.0) {
+          sections.push({ start: stateStart, state: lastState });
+          lastState = nextState;
+          stateStart = now;
+        }
+      }
+    }
+
+    sections.push({ start: stateStart, state: lastState ?? 'calm' });
+    if (!sections.length || sections[0].start > 0) {
+      sections.unshift({ start: 0, state: 'calm' });
+    }
+
+    return {
+      duration,
+      hopSec,
+      beats,
+      beatInterval: medianBeatInterval,
+      firstBeat: beats[0] ?? 0,
+      sections
+    };
+  }
+
+  async decodeAudioFile(file) {
+    const buffer = await file.arrayBuffer();
+    const copied = buffer.slice(0);
+
+    try {
+      return await this.audioContext.decodeAudioData(copied);
+    } catch (primaryError) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) throw primaryError;
+
+      const fallbackContext = new AudioCtx();
+      try {
+        if (fallbackContext.state === 'suspended') {
+          await fallbackContext.resume();
+        }
+        return await fallbackContext.decodeAudioData(buffer.slice(0));
+      } finally {
+        if (fallbackContext.state !== 'closed') {
+          await fallbackContext.close();
+        }
+      }
+    }
   }
 
   async startFromYouTube(youtubeUrl) {
@@ -115,6 +370,43 @@ export class AudioAnalyzer {
     this.timeData = new Uint8Array(this.analyser.fftSize);
   }
 
+  getPlaybackTime() {
+    if (this.mediaElement) {
+      return this.mediaElement.currentTime || 0;
+    }
+
+    return 0;
+  }
+
+  getTimelineState(playbackTime) {
+    if (!this.preprocessedTimeline || !Number.isFinite(playbackTime)) return null;
+    const { duration, sections } = this.preprocessedTimeline;
+    if (!duration || !sections?.length) return null;
+
+    const wrappedTime = ((playbackTime % duration) + duration) % duration;
+    let activeState = sections[0].state;
+    for (let i = 1; i < sections.length; i++) {
+      if (sections[i].start > wrappedTime) break;
+      activeState = sections[i].state;
+    }
+    return activeState;
+  }
+
+  getTimelinePulse(playbackTime) {
+    if (!this.preprocessedTimeline || !Number.isFinite(playbackTime)) return null;
+    const { duration, beatInterval, firstBeat } = this.preprocessedTimeline;
+    if (!duration || !beatInterval) return null;
+
+    const wrappedTime = ((playbackTime % duration) + duration) % duration;
+    const offset = wrappedTime - firstBeat;
+    const phase = ((offset / beatInterval) % 1 + 1) % 1;
+    return Math.sin(phase * Math.PI * 2);
+  }
+
+  getPreprocessMeta() {
+    return this.preprocessMeta;
+  }
+
   getFeatures() {
     if (!this.isRunning || !this.analyser) {
       return this.features;
@@ -146,6 +438,7 @@ export class AudioAnalyzer {
     const beatDetected = delta > 0.1 && rms > 0.06 && (now - this.lastBeatTime) > this.cooldownMs;
     if (beatDetected) {
       this.lastBeatTime = now;
+      this.features.beatCount += 1;
     }
 
     this.prevEnergy = this.lerp(this.prevEnergy, energy, 0.4);
@@ -199,10 +492,29 @@ export class AudioAnalyzer {
       this.gainNode = null;
     }
 
+    if (this.mediaElement) {
+      this.mediaElement.pause();
+      this.mediaElement.removeAttribute('src');
+      this.mediaElement.load();
+      this.mediaElement = null;
+    }
+
+    if (this.objectUrl) {
+      URL.revokeObjectURL(this.objectUrl);
+      this.objectUrl = null;
+    }
+
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => track.stop());
       this.mediaStream = null;
     }
+
+    this.features.beat = 0;
+    this.features.beatCount = 0;
+    this.prevEnergy = 0;
+    this.lastBeatTime = 0;
+    this.preprocessedTimeline = null;
+    this.preprocessMeta = { status: 'idle', reason: null, beats: 0, sections: 0 };
   }
 
   async dispose() {
