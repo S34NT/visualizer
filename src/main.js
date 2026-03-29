@@ -27,10 +27,7 @@ class MurmurationSimulator {
     this.evolutionPhase = 0;
     this.evolutionPhaseSecondary = 0;
     this.marginTarget = defaults.margin;
-    this.lastMarginMeasureIndex = -1;
-    this.lastMarginPlaybackTime = 0;
-    this.marginClockStarted = false;
-    this.marginClockStartTime = 0;
+    this.lastMarginSectionState = null;
 
     this.isPaused = false;
     this.time = 0;
@@ -300,38 +297,21 @@ class MurmurationSimulator {
     return marginSteps[nextIndex];
   }
 
-  maybeStepMarginOnMeasure(playbackTime, bassLevel, marginPositiveBias = 0.5) {
-    if (playbackTime < this.lastMarginPlaybackTime) {
-      this.lastMarginMeasureIndex = -1;
-      this.marginClockStarted = false;
-      this.marginClockStartTime = 0;
-    }
-
-    this.lastMarginPlaybackTime = playbackTime;
-
-    if (!this.marginClockStarted) {
-      if (bassLevel < 0.12) return;
-
-      this.marginClockStarted = true;
-      this.marginClockStartTime = playbackTime;
-      this.lastMarginMeasureIndex = 0;
+  maybeStepMarginOnSectionChange(sectionState, marginPositiveBias = 0.5) {
+    if (!sectionState) return;
+    if (this.lastMarginSectionState === null) {
+      this.lastMarginSectionState = sectionState;
       return;
     }
 
-    const elapsed = Math.max(0, playbackTime - this.marginClockStartTime);
-    const currentMeasureIndex = Math.floor(elapsed / 4);
-    if (currentMeasureIndex <= this.lastMarginMeasureIndex) return;
+    if (sectionState === this.lastMarginSectionState) return;
 
-    for (let measureIndex = this.lastMarginMeasureIndex + 1; measureIndex <= currentMeasureIndex; measureIndex++) {
-      this.marginTarget = this.normalizeMarginStep(this.marginTarget);
-
-      if (Math.random() >= (1 / 3)) continue;
-
+    this.marginTarget = this.normalizeMarginStep(this.marginTarget);
+    if (Math.random() < (1 / 3)) {
       const direction = Math.random() < marginPositiveBias ? 1 : -1;
       this.marginTarget = this.nextMarginStep(this.marginTarget, direction);
     }
-
-    this.lastMarginMeasureIndex = currentMeasureIndex;
+    this.lastMarginSectionState = sectionState;
   }
 
   applyAudioReactiveModulation() {
@@ -412,7 +392,7 @@ class MurmurationSimulator {
     const lerp = (current, target, alpha) => current + (target - current) * alpha;
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-    this.maybeStepMarginOnMeasure(playbackTime, bassEnergy, this.progressionProfile.marginPositiveBias);
+    this.maybeStepMarginOnSectionChange(this.progressionState, this.progressionProfile.marginPositiveBias);
 
     this.params.maxSpeed = targetMaxSpeed;
     this.params.matchingFactor = lerp(this.params.matchingFactor, targetMatching, 0.12);
@@ -839,10 +819,7 @@ class MurmurationSimulator {
     this.lastPulseIndex = -1;
     this.pulseDepth = 0;
     this.lastWallClockSampleTime = performance.now();
-    this.lastMarginMeasureIndex = -1;
-    this.lastMarginPlaybackTime = 0;
-    this.marginClockStarted = false;
-    this.marginClockStartTime = 0;
+    this.lastMarginSectionState = null;
     this.marginTarget = this.baseAudioParams.margin;
     this.sceneManager?.setAutoRotateSpeed?.(0.12);
   }
