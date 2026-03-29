@@ -12,6 +12,8 @@ export class AudioAnalyzer {
     this.analyser = null;
     this.gainNode = null;
     this.mediaStream = null;
+    this.mediaElement = null;
+    this.objectUrl = null;
 
     this.freqData = null;
     this.timeData = null;
@@ -25,12 +27,46 @@ export class AudioAnalyzer {
       mid: 0,
       treble: 0,
       beat: 0,
+      beatCount: 0,
       peak: 0
     };
 
     this.prevEnergy = 0;
     this.lastBeatTime = 0;
     this.cooldownMs = options.cooldownMs ?? 120;
+  }
+
+
+  async startFromFile(file) {
+    if (!file) {
+      throw new Error('No audio file selected.');
+    }
+
+    await this.ensureAudioContext();
+
+    this.stop();
+
+    this.objectUrl = URL.createObjectURL(file);
+    const audio = document.createElement('audio');
+    audio.src = this.objectUrl;
+    audio.crossOrigin = 'anonymous';
+    audio.loop = true;
+    audio.preload = 'auto';
+
+    this.sourceNode = this.audioContext.createMediaElementSource(audio);
+    this.mediaElement = audio;
+    this.connectGraph();
+
+    try {
+      await audio.play();
+    } catch (error) {
+      this.stop();
+      throw new Error('Audio file could not be played. On iPhone, try selecting the file again after interacting with the page.');
+    }
+
+    this.isInitialized = true;
+    this.isRunning = true;
+    return true;
   }
 
   async startFromYouTube(youtubeUrl) {
@@ -115,6 +151,14 @@ export class AudioAnalyzer {
     this.timeData = new Uint8Array(this.analyser.fftSize);
   }
 
+  getPlaybackTime() {
+    if (this.mediaElement) {
+      return this.mediaElement.currentTime || 0;
+    }
+
+    return 0;
+  }
+
   getFeatures() {
     if (!this.isRunning || !this.analyser) {
       return this.features;
@@ -146,6 +190,7 @@ export class AudioAnalyzer {
     const beatDetected = delta > 0.1 && rms > 0.06 && (now - this.lastBeatTime) > this.cooldownMs;
     if (beatDetected) {
       this.lastBeatTime = now;
+      this.features.beatCount += 1;
     }
 
     this.prevEnergy = this.lerp(this.prevEnergy, energy, 0.4);
@@ -199,10 +244,27 @@ export class AudioAnalyzer {
       this.gainNode = null;
     }
 
+    if (this.mediaElement) {
+      this.mediaElement.pause();
+      this.mediaElement.removeAttribute('src');
+      this.mediaElement.load();
+      this.mediaElement = null;
+    }
+
+    if (this.objectUrl) {
+      URL.revokeObjectURL(this.objectUrl);
+      this.objectUrl = null;
+    }
+
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => track.stop());
       this.mediaStream = null;
     }
+
+    this.features.beat = 0;
+    this.features.beatCount = 0;
+    this.prevEnergy = 0;
+    this.lastBeatTime = 0;
   }
 
   async dispose() {
