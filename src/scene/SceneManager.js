@@ -26,8 +26,10 @@ export class SceneManager {
   initCamera() {
     const aspect = this.width / this.height;
     this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 2000);
-    this.camera.position.set(0, 0, 300);
-    this.camera.lookAt(0, 0, 0);
+    this.defaultCameraPosition = new THREE.Vector3(0, 0, 1400);
+    this.defaultCameraTarget = new THREE.Vector3(0, 0, 0);
+    this.camera.position.copy(this.defaultCameraPosition);
+    this.camera.lookAt(this.defaultCameraTarget);
   }
   
   initRenderer() {
@@ -46,13 +48,17 @@ export class SceneManager {
   
   initControls() {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.target.copy(this.defaultCameraTarget);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
     this.controls.rotateSpeed = 0.8;
+    this.controls.autoRotate = true;
+    this.baseAutoRotateSpeed = 0.12;
+    this.controls.autoRotateSpeed = this.baseAutoRotateSpeed;
     this.controls.zoomSpeed = 1.2;
     this.controls.panSpeed = 0.8;
     this.controls.minDistance = 50;
-    this.controls.maxDistance = 1000;
+    this.controls.maxDistance = 2000;
     this.controls.enablePan = true;
     
     // Touch support
@@ -60,6 +66,8 @@ export class SceneManager {
       ONE: THREE.TOUCH.ROTATE,
       TWO: THREE.TOUCH.DOLLY_PAN
     };
+    this.controls.update();
+    this.controls.saveState();
   }
   
   initLighting() {
@@ -89,6 +97,10 @@ export class SceneManager {
     this.scene.remove(object);
   }
   
+  setAutoRotateSpeed(speed) {
+    this.controls.autoRotateSpeed = Math.min(2.5, Math.max(0.08, speed));
+  }
+
   update() {
     this.controls.update();
   }
@@ -102,9 +114,11 @@ export class SceneManager {
   }
   
   resetCamera() {
-    this.camera.position.set(0, 0, 300);
-    this.camera.lookAt(0, 0, 0);
-    this.controls.reset();
+    this.controls.target.copy(this.defaultCameraTarget);
+    this.camera.position.copy(this.defaultCameraPosition);
+    this.camera.lookAt(this.defaultCameraTarget);
+    this.controls.update();
+    this.controls.saveState();
   }
 }
 
