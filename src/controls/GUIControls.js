@@ -80,13 +80,17 @@ export class GUIControls {
       }
     });
 
-    this.gui.controllersRecursive().forEach(controller => {
-      controller.updateDisplay();
-    });
+    this.refreshDisplay();
 
     if (preset.birdCount && this.callbacks.onBirdCountChange) {
       this.callbacks.onBirdCountChange(preset.birdCount);
     }
+  }
+
+  refreshDisplay() {
+    this.gui.controllersRecursive().forEach(controller => {
+      controller.updateDisplay();
+    });
   }
 
   setPauseState(isPaused) {
