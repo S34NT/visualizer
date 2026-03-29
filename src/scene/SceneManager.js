@@ -34,6 +34,14 @@ export class SceneManager {
     this.defaultCameraTarget = new THREE.Vector3(0, 0, 0);
     this.camera.position.copy(this.defaultCameraPosition);
     this.camera.lookAt(this.defaultCameraTarget);
+    this.choreographyState = {
+      enabled: true,
+      orbitAngle: 0,
+      currentRadius: this.defaultCameraPosition.length(),
+      targetRadius: this.defaultCameraPosition.length(),
+      currentHeight: this.defaultCameraPosition.y
+    };
+    this.minChoreographyRadius = 780;
   }
   
   initRenderer() {
@@ -180,6 +188,42 @@ export class SceneManager {
     this.controls.autoRotateSpeed = Math.min(2.5, Math.max(0.08, speed));
   }
 
+  setCameraChoreographyEnabled(enabled) {
+    this.choreographyState.enabled = enabled;
+  }
+
+  updateCameraChoreography({ section = 'calm', intensity = 0, pulse = 0, deltaTime = 0.016 }) {
+    if (!this.choreographyState.enabled) return;
+
+    const profiles = {
+      calm: { radius: 1360, orbitSpeed: 0.04, height: 40 },
+      rising: { radius: 1180, orbitSpeed: 0.09, height: 70 },
+      peak: { radius: 980, orbitSpeed: 0.14, height: 95 },
+      release: { radius: 1240, orbitSpeed: 0.06, height: 55 }
+    };
+    const profile = profiles[section] || profiles.calm;
+    const pulseDepth = Math.max(-1, Math.min(1, pulse));
+    const safeTargetRadius = Math.max(
+      this.minChoreographyRadius,
+      profile.radius - intensity * 110 - Math.max(0, pulseDepth) * 45
+    );
+
+    const smoothing = 1 - Math.exp(-Math.max(0.001, deltaTime) / 1.5);
+    this.choreographyState.targetRadius = safeTargetRadius;
+    this.choreographyState.currentRadius +=
+      (this.choreographyState.targetRadius - this.choreographyState.currentRadius) * smoothing;
+    this.choreographyState.currentRadius = Math.max(this.minChoreographyRadius, this.choreographyState.currentRadius);
+
+    this.choreographyState.orbitAngle += profile.orbitSpeed * Math.max(0.4, 0.5 + intensity) * deltaTime;
+    this.choreographyState.currentHeight +=
+      ((profile.height + pulseDepth * 26) - this.choreographyState.currentHeight) * smoothing;
+
+    const x = Math.cos(this.choreographyState.orbitAngle) * this.choreographyState.currentRadius;
+    const z = Math.sin(this.choreographyState.orbitAngle) * this.choreographyState.currentRadius;
+    this.camera.position.set(x, this.choreographyState.currentHeight, z);
+    this.controls.target.set(0, pulseDepth * 12, 0);
+  }
+
   update() {
     this.controls.update();
   }
@@ -212,10 +256,12 @@ export class SceneManager {
     this.controls.target.copy(this.defaultCameraTarget);
     this.camera.position.copy(this.defaultCameraPosition);
     this.camera.lookAt(this.defaultCameraTarget);
+    this.choreographyState.currentRadius = this.defaultCameraPosition.length();
+    this.choreographyState.targetRadius = this.defaultCameraPosition.length();
+    this.choreographyState.currentHeight = this.defaultCameraPosition.y;
     this.controls.update();
     this.controls.saveState();
   }
 }
-
 
 

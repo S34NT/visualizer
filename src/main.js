@@ -83,7 +83,8 @@ class MurmurationSimulator {
     this.debugOptions = {
       showDebugHud: true,
       usePreprocessedTimeline: true,
-      benchmarkEnabled: false
+      benchmarkEnabled: false,
+      cameraChoreography: true
     };
     this.debugHudEl = null;
     this.lastHudUpdateAt = 0;
@@ -532,7 +533,11 @@ class MurmurationSimulator {
         this.debugOptions.usePreprocessedTimeline = enabled;
         this.updateDebugHud(true);
       },
-      onBenchmarkToggle: (enabled) => this.setBenchmarkEnabled(enabled)
+      onBenchmarkToggle: (enabled) => this.setBenchmarkEnabled(enabled),
+      onCameraChoreographyToggle: (enabled) => {
+        this.debugOptions.cameraChoreography = enabled;
+        this.sceneManager.setCameraChoreographyEnabled(enabled);
+      }
     }, this.debugOptions);
   }
 
@@ -626,6 +631,7 @@ class MurmurationSimulator {
       `Backend: ${this.backendVariant || this.flockBackend}`,
       `Preprocess: ${preprocessSummary}`,
       `Timeline mode: ${this.debugOptions.usePreprocessedTimeline ? 'enabled' : 'disabled'}`,
+      `Camera choreo: ${this.debugOptions.cameraChoreography ? 'enabled' : 'disabled'}`,
       `Section: ${this.progressionState}`,
       `Pulse source: ${this.pulseSource}`,
       `FPS(est): ${this.fpsEstimate.toFixed(1)}`,
@@ -770,6 +776,12 @@ class MurmurationSimulator {
 
     if (!this.isPaused) {
       this.applyAudioReactiveModulation();
+      this.sceneManager.updateCameraChoreography({
+        section: this.progressionState,
+        intensity: this.intensity,
+        pulse: this.pulseDepth,
+        deltaTime: frameDt * 0.001
+      });
       this.sceneManager.setAutoRotateSpeed(0.12 + this.intensity * 2.0 * this.progressionProfile.cameraGain);
       this.maybeRefreshGuiDisplay();
       this.updateDebugHud();

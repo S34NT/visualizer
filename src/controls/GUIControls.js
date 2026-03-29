@@ -78,6 +78,9 @@ export class GUIControls {
       debugFolder.add(this.debugOptions, 'benchmarkEnabled')
         .name('Benchmark Logs')
         .onChange((value) => this.callbacks.onBenchmarkToggle?.(value));
+      debugFolder.add(this.debugOptions, 'cameraChoreography')
+        .name('Camera Choreo')
+        .onChange((value) => this.callbacks.onCameraChoreographyToggle?.(value));
     }
 
     flockFolder.open();
