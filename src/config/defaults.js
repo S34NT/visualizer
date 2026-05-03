@@ -2,10 +2,10 @@
 export const defaults = {
   // Flocking behavior
   visualRange: 10,
-  protectedRange: 30,
-  centeringFactor: 0.00001,
-  avoidFactor: 0.1,
-  matchingFactor: 0.1,
+  protectedRange: 8,
+  centeringFactor: 0.0005,
+  avoidFactor: 0.05,
+  matchingFactor: 0.05,
 
   // Movement constraints
   maxSpeed: 2,
