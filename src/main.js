@@ -55,7 +55,7 @@ class MurmurationSimulator {
     this.audioLoadButton = null;
     this.audioDemoButton = null;
     this.audioFileInput = null;
-    this.demoAudioUrl = '/src/audio/Voodoo & Serano - Blood Is Pumping.mp3';
+    this.demoAudioUrl = '/audio/Voodoo & Serano - Blood Is Pumping.mp3';
     this.noAudioFrames = 0;
     this.lastGuiRefreshAt = 0;
 
