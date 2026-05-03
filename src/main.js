@@ -53,7 +53,9 @@ class MurmurationSimulator {
       peak: 0
     };
     this.audioLoadButton = null;
+    this.audioDemoButton = null;
     this.audioFileInput = null;
+    this.demoAudioUrl = '/audio/demo-placeholder.mp3';
     this.noAudioFrames = 0;
     this.lastGuiRefreshAt = 0;
 
@@ -80,6 +82,8 @@ class MurmurationSimulator {
   }
 
   async initAudioAnalyzer(file) {
+    if (this.audioLoadButton) this.audioLoadButton.disabled = false;
+    if (this.audioDemoButton) this.audioDemoButton.disabled = false;
     if (this.audioInitializing) return;
     if (!file) {
       this.showStatus('Choose an MP3 or WAV file to start audio reactivity.', true, 2800);
@@ -102,6 +106,10 @@ class MurmurationSimulator {
       if (this.audioLoadButton) {
         this.audioLoadButton.textContent = '🎵 Audio File Loaded';
       }
+      if (this.audioDemoButton) {
+        this.audioDemoButton.disabled = false;
+        this.audioDemoButton.textContent = '▶ Try Demo';
+      }
     } catch (error) {
       console.error('Failed to initialize audio analyzer:', error);
       this.showStatus(`Audio load failed: ${error.message}`, true);
@@ -109,6 +117,10 @@ class MurmurationSimulator {
       this.noAudioFrames = 0;
       if (this.audioLoadButton) {
         this.audioLoadButton.textContent = '🎵 Load MP3/WAV';
+      }
+      if (this.audioDemoButton) {
+        this.audioDemoButton.disabled = false;
+        this.audioDemoButton.textContent = '▶ Try Demo';
       }
     }
 
@@ -183,6 +195,36 @@ class MurmurationSimulator {
     this.params.maxSpeed = Math.max(this.params.maxSpeed, this.params.minSpeed + 0.4);
   }
 
+
+  async startDemoAudio() {
+    if (this.audioInitializing) return;
+
+    if (this.audioLoadButton) this.audioLoadButton.disabled = true;
+    if (this.audioDemoButton) this.audioDemoButton.disabled = true;
+    this.showStatus('🎵 Loading demo audio...');
+
+    try {
+      const response = await fetch(this.demoAudioUrl);
+      if (!response.ok) {
+        throw new Error('Demo audio not found. Please add a demo file at the configured path.');
+      }
+
+      const blob = await response.blob();
+      const demoFile = new File([blob], 'demo-audio.mp3', { type: blob.type || 'audio/mpeg' });
+      await this.initAudioAnalyzer(demoFile);
+      if (this.audioLoadButton) this.audioLoadButton.disabled = true;
+      if (this.audioDemoButton) {
+        this.audioDemoButton.textContent = '🎵 Demo Playing';
+        this.audioDemoButton.disabled = false;
+      }
+      this.showStatus('🎵 Demo audio active', false, 2500);
+    } catch (error) {
+      this.showStatus(`Demo audio failed: ${error.message}`, true);
+      if (this.audioLoadButton) this.audioLoadButton.disabled = false;
+      if (this.audioDemoButton) this.audioDemoButton.disabled = false;
+    }
+  }
+
   initAudioLoadButton() {
     if (this.audioLoadButton) return;
 
@@ -191,6 +233,8 @@ class MurmurationSimulator {
     button.type = 'button';
     button.textContent = '🎵 Load MP3/WAV';
     button.style.cssText = `
+      transition: opacity 0.2s ease;
+
       position: fixed;
       bottom: 20px;
       left: 20px;
@@ -223,10 +267,21 @@ class MurmurationSimulator {
       fileInput.click();
     });
 
+    const demoButton = document.createElement('button');
+    demoButton.id = 'audio-demo-button';
+    demoButton.type = 'button';
+    demoButton.textContent = '▶ Try Demo';
+    demoButton.style.cssText = button.style.cssText + 'left: 190px;';
+    demoButton.addEventListener('click', async () => {
+      await this.startDemoAudio();
+    });
+
     document.body.appendChild(fileInput);
     document.body.appendChild(button);
+    document.body.appendChild(demoButton);
     this.audioFileInput = fileInput;
     this.audioLoadButton = button;
+    this.audioDemoButton = demoButton;
   }
 
   initScene() {
