@@ -66,8 +66,7 @@ export class GUIControls {
       fullscreen: () => this.callbacks.onFullscreen?.()
     }, 'fullscreen').name('Fullscreen');
 
-    flockFolder.open();
-    behaviorFolder.open();
+    this.gui.close();
   }
 
   loadPreset(name) {

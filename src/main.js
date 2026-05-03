@@ -52,7 +52,7 @@ class MurmurationSimulator {
       beat: 0,
       peak: 0
     };
-    this.audioLinkButton = null;
+    this.audioLoadButton = null;
     this.audioFileInput = null;
     this.noAudioFrames = 0;
     this.lastGuiRefreshAt = 0;
@@ -65,7 +65,7 @@ class MurmurationSimulator {
     this.initGUI();
     this.initStats();
     this.initKeyboard();
-    this.initAudioLinkButton();
+    this.initAudioLoadButton();
 
     this.showStatus(
       this.flockBackend === 'rust'
@@ -99,16 +99,16 @@ class MurmurationSimulator {
 
       this.showStatus(`🎵 Audio visualizer active: ${file.name}`, false, 3500);
       this.noAudioFrames = 0;
-      if (this.audioLinkButton) {
-        this.audioLinkButton.textContent = '🎵 Audio File Loaded';
+      if (this.audioLoadButton) {
+        this.audioLoadButton.textContent = '🎵 Audio File Loaded';
       }
     } catch (error) {
       console.error('Failed to initialize audio analyzer:', error);
       this.showStatus(`Audio load failed: ${error.message}`, true);
       this.audioAnalyzer = null;
       this.noAudioFrames = 0;
-      if (this.audioLinkButton) {
-        this.audioLinkButton.textContent = '🎵 Load MP3/WAV';
+      if (this.audioLoadButton) {
+        this.audioLoadButton.textContent = '🎵 Load MP3/WAV';
       }
     }
 
@@ -183,11 +183,11 @@ class MurmurationSimulator {
     this.params.maxSpeed = Math.max(this.params.maxSpeed, this.params.minSpeed + 0.4);
   }
 
-  initAudioLinkButton() {
-    if (this.audioLinkButton) return;
+  initAudioLoadButton() {
+    if (this.audioLoadButton) return;
 
     const button = document.createElement('button');
-    button.id = 'audio-link-button';
+    button.id = 'audio-load-button';
     button.type = 'button';
     button.textContent = '🎵 Load MP3/WAV';
     button.style.cssText = `
@@ -226,7 +226,7 @@ class MurmurationSimulator {
     document.body.appendChild(fileInput);
     document.body.appendChild(button);
     this.audioFileInput = fileInput;
-    this.audioLinkButton = button;
+    this.audioLoadButton = button;
   }
 
   initScene() {
@@ -390,9 +390,6 @@ class MurmurationSimulator {
         case 'KeyH':
           this.gui.toggle();
           break;
-        case 'KeyM':
-          this.audioFileInput?.click();
-          break;
         case 'KeyB':
           this.toggleBenchmark();
           break;
@@ -477,7 +474,7 @@ class MurmurationSimulator {
 
     if (this.audioLinkButton) {
       this.audioLinkButton.remove();
-      this.audioLinkButton = null;
+      this.audioLoadButton = null;
     }
 
     if (this.audioFileInput) {
