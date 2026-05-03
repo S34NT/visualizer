@@ -36,7 +36,7 @@ export class AudioAnalyzer {
   }
 
 
-  async startFromFile(file) {
+  async startFromFile(file, options = {}) {
     if (!file) {
       throw new Error('No audio file selected.');
     }
@@ -49,11 +49,19 @@ export class AudioAnalyzer {
     const audio = document.createElement('audio');
     audio.src = this.objectUrl;
     audio.crossOrigin = 'anonymous';
-    audio.loop = true;
+    const { loop = true, onEnded } = options;
+    audio.loop = loop;
     audio.preload = 'auto';
 
     this.sourceNode = this.audioContext.createMediaElementSource(audio);
     this.mediaElement = audio;
+
+    if (!loop && typeof onEnded === 'function') {
+      audio.addEventListener('ended', () => {
+        this.stop();
+        onEnded();
+      }, { once: true });
+    }
     this.connectGraph();
 
     try {
