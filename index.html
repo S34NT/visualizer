@@ -31,23 +31,6 @@
       display: block;
     }
     
-    #info {
-      position: fixed;
-      bottom: 20px;
-      left: 20px;
-      color: rgba(255, 255, 255, 0.5);
-      font-size: 12px;
-      pointer-events: none;
-      z-index: 100;
-    }
-    
-    #info kbd {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 2px 6px;
-      border-radius: 3px;
-      margin: 0 2px;
-    }
-    
     #pause-indicator {
       position: fixed;
       top: 50%;
@@ -69,13 +52,6 @@
 <body>
   <div id="canvas-container"></div>
   <div id="pause-indicator">⏸ PAUSED</div>
-  <div id="info">
-    <kbd>Space</kbd> Pause &nbsp;
-    <kbd>R</kbd> Reset &nbsp;
-    <kbd>F</kbd> Fullscreen &nbsp;
-    <kbd>S</kbd> Screenshot &nbsp;
-    <kbd>M</kbd> Link YouTube Audio
-  </div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
