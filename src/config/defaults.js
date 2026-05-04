@@ -14,7 +14,7 @@ export const defaults = {
   margin: 100,
 
   // Simulation size
-  birdCount: 1000,
+  birdCount: 2000,
   bounds: 150,
 
   // Visualization
