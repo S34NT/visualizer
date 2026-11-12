@@ -1,0 +1,5 @@
+# WASM SIMD (fixed-width 128-bit) is supported by every current browser
+# (Chrome 91+, Firefox 89+, Safari 16.4+). Older browsers fail to compile the
+# module and the app falls back to the JS flock automatically.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]

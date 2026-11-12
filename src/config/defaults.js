@@ -10,16 +10,16 @@ export const defaults = {
   // Movement constraints
   maxSpeed: 2,
   minSpeed: 1,
-  turnFactor: 0.5,
-  margin: 100,
+  turnFactor: 0.3,
+  margin: 25,
 
   // Simulation size
   birdCount: 2000,
   bounds: 150,
 
   // Visualization
-  particleSize: 5,
-  maxDistance: 250,
+  particleSize: 4.5,
+  maxDistance: 220,
 
   // Performance
   targetFPS: 60,

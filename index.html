@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="A mesmerizing 3D murmuration simulator with position-based color visualization">
+  <meta name="description" content="A hypnotic, ever-evolving 3D murmuration visualizer that follows the rhythm of your music">
   <title>Murmuration Simulator</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐦</text></svg>">
   <style>
@@ -46,6 +46,27 @@
     
     #pause-indicator.visible {
       opacity: 1;
+    }
+
+    #scene-label {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      color: rgba(255, 255, 255, 0.85);
+      font-size: 13px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 1.2s ease, transform 1.2s ease;
+      text-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+    }
+
+    #scene-label.visible {
+      opacity: 1;
+      transform: translateY(0);
     }
   </style>
 </head>
