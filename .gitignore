@@ -29,3 +29,7 @@ npm-debug.log*
 
 # Purchased demo tracks: keep local, do not redistribute
 public/audio/Sidewalks and Skeletons - Euthanasia Daze.*
+
+# Rust build output (rebuilt by scripts/build-wasm.sh on every deploy)
+rust/boids-wasm/target/
+rust/boids-wasm/target-mt/
