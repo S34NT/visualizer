@@ -48,6 +48,7 @@ class MurmurationSimulator {
     this.audioInitializing = false;
     this.audioFeatures = null;
     this.audioLoadButton = null;
+    this.audioStopButton = null;
     this.audioFileInput = null;
     this.audioBar = null;
     // Demo tracks, one button each. Later tracks list candidate files in order
@@ -206,6 +207,7 @@ class MurmurationSimulator {
       }
       this.activeDemo = -1;
       this.refreshDemoButtons();
+      this.setStopButtonVisible(true);
     } catch (error) {
       console.error('Failed to initialize audio analyzer:', error);
       this.showStatus(`Audio load failed: ${error.message}`, true);
@@ -216,9 +218,32 @@ class MurmurationSimulator {
       }
       this.activeDemo = -1;
       this.refreshDemoButtons();
+      this.setStopButtonVisible(false);
     }
 
     this.audioInitializing = false;
+  }
+
+  /** Stop playback and return the audio bar to its initial state. */
+  async stopAudio() {
+    if (this.audioInitializing || !this.audioAnalyzer) return;
+    const analyzer = this.audioAnalyzer;
+    this.audioAnalyzer = null;
+    this.audioFeatures = null;
+    this.noAudioFrames = 0;
+    this.activeDemo = -1;
+    if (this.audioLoadButton) {
+      this.audioLoadButton.textContent = '🎵 Load MP3/WAV';
+      this.audioLoadButton.disabled = false;
+    }
+    this.refreshDemoButtons();
+    this.setStopButtonVisible(false);
+    this.showStatus('⏹ Music stopped', false, 1800);
+    await analyzer.dispose();
+  }
+
+  setStopButtonVisible(visible) {
+    if (this.audioStopButton) this.audioStopButton.style.display = visible ? '' : 'none';
   }
 
   async startDemoAudio(index = 0) {
@@ -341,11 +366,21 @@ class MurmurationSimulator {
       fileInput.click();
     });
 
+    const stopButton = document.createElement('button');
+    stopButton.id = 'audio-stop-button';
+    stopButton.type = 'button';
+    stopButton.textContent = '⏹ Stop Music';
+    stopButton.style.cssText = button.style.cssText;
+    stopButton.style.display = 'none';
+    stopButton.addEventListener('click', () => this.stopAudio());
+
     document.body.appendChild(fileInput);
     bar.appendChild(button);
+    bar.appendChild(stopButton);
     document.body.appendChild(bar);
     this.audioFileInput = fileInput;
     this.audioLoadButton = button;
+    this.audioStopButton = stopButton;
     this.audioBar = bar;
 
     // The first track is always offered; later ones only if their file exists.
@@ -1067,6 +1102,7 @@ class MurmurationSimulator {
       this.audioLoadButton.remove();
       this.audioLoadButton = null;
     }
+    this.audioStopButton = null;
 
     if (this.audioBar) {
       this.audioBar.remove();
